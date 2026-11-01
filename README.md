@@ -3,8 +3,8 @@
 **实时双目 3D 场景感知（PC 端仓库）。**
 
 本仓库只包含 PC/macOS 端：接收 Pi 的双目帧、校正、SGBM、路由、检测/聚合、点云、ROS 2。
-树莓派采集端是**另一个仓库** `raspberry-pi/`（或 Mac 上单独拿到的那份 Pi 仓库），
-两者通过 ZMQ + `SDP1` 协议通信，见 [docs/interfaces.md](docs/interfaces.md)。
+树莓派采集端是**另一个仓库**：[pi5-stereo-perception-edge](https://github.com/zmmmawzfl/pi5-stereo-perception-edge)
+两端通过 ZMQ + `SDP1` 协议通信，详见 [docs/interfaces.md](docs/interfaces.md)。
 
 > **当前状态（诚实版）**
 > - 本仓库 **80 个单元测试**通过（Mac 上 80 tests OK）。

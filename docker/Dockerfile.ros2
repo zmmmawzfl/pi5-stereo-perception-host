@@ -1,0 +1,28 @@
+# ROS 2 Humble 运行期 / 纯 CPU 联调容器。
+#
+# 明确边界：
+#   * 容器内没有 GPU，不要在这里装 TensorRT/CUDA，也不要拿容器里的
+#     onnxruntime CPU 数字冒充 macOS CoreML 或 RTX 3060 的数字；
+#   * 视觉主力（OpenCV SGBM、YOLO CoreML、FFS CoreML EP）在 macOS 原生跑；
+#     容器只做 ROS 2 话题、TF、Foxglove bridge、RTAB-Map/Nav2 的接口验证。
+FROM ros:humble-ros-base
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+ENV ROS_DOMAIN_ID=42
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        software-properties-common \
+    && add-apt-repository -y universe \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        python3-opencv \
+        python3-numpy \
+        python3-yaml \
+        python3-zmq \
+        ros-humble-foxglove-bridge \
+        ros-humble-rmw-cyclonedds-cpp \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+# 基础镜像自带的 /ros_entrypoint.sh 会 source /opt/ros/humble/setup.bash
+CMD ["bash"]

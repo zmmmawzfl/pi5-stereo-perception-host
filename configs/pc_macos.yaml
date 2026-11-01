@@ -1,0 +1,48 @@
+# macOS 原生（Apple Silicon）配置：视觉延迟敏感环节在本机跑。
+# - SGBM：OpenCV CPU
+# - YOLO：CoreML（先 `yolo export ... format=coreml` 得到 .mlpackage）
+# - FFS：ONNX Runtime CoreML EP（先用 learned_provider=coreml；失败再用 cpu 做正确性对照）
+#
+# Docker 只用 ../docker-compose.yml 跑 ROS 2/纯 CPU 联调，不要用这个配置去容器里跑。
+
+camera:
+  width: 640
+  height: 480
+  fps: 30
+
+calib:
+  calib_path: data/calib/stereo_calib.npz
+
+sgbm:
+  num_disparities: 96
+  scale: 1.0
+  roi_xywh: ""
+  block_size: 5
+  texture_threshold: 6.0
+  lr_max_diff: 1.0
+  subpixel: true
+  # 默认不启用学习型；确认 ONNX 输入/输出语义后再改 onnx
+  learned_backend: none
+  learned_model: models/c_fast_foundationstereo_bp2_dynbatch_dynhw.onnx
+  learned_provider: coreml
+  learned_input_mode: batch
+  learned_input_size: ""
+
+detect:
+  backend: auto
+  # 先在 macOS 上导出：yolo export model=models/yolov8n.pt format=coreml nms=True
+  model_path: models/yolov8n.mlpackage
+  conf: 0.25
+  imgsz: 640
+  device: auto
+
+pointcloud:
+  voxel_size_m: 0.03
+  max_depth_m: 6.0
+  stride: 2
+  publish_rate_hz: 10.0
+
+objects:
+  ground_classes: object,box,cup,bottle,chair
+  ground_band: 0.45
+  min_valid_ratio: 0.20

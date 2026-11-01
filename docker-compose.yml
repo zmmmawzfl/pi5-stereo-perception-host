@@ -1,0 +1,29 @@
+# macOS Docker Desktop：ROS 2 运行期验证 + 纯 CPU 管线/接口联调。
+# 不用 network_mode: host（Docker Desktop for Mac 不支持）；用端口映射 +
+# host.docker.internal。视觉主链路仍在 macOS 原生跑，见 docs/macos_docker.md。
+name: stereo-depth
+
+services:
+  ros2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ros2
+    image: stereo-depth-ros2:humble
+    init: true
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    environment:
+      ROS_DOMAIN_ID: "42"
+      RMW_IMPLEMENTATION: rmw_cyclonedds_cpp
+      # 宿主机上的 Pi 接收端/本地 publisher；在 compose 里可被覆盖
+      SDP_ENDPOINT: tcp://host.docker.internal:5555
+    extra_hosts:
+      # Linux 上也有用；macOS Docker Desktop 原生支持 host.docker.internal
+      - "host.docker.internal:host-gateway"
+    ports:
+      # Foxglove bridge；DDS 本身不跨容器 NAT，Foxglove 走 WebSocket
+      - "8765:8765"
+    command: ["bash", "-lc", "sleep infinity"]
+    stdin_open: true
+    tty: true

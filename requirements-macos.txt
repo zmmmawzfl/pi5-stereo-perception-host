@@ -1,0 +1,12 @@
+-r requirements.txt
+# macOS 原生（Apple Silicon）：SGBM + YOLO CoreML + FFS ONNX CoreML EP
+opencv-contrib-python>=4.8
+ultralytics>=8.2
+# 官方 macOS wheel 带 CoreMLExecutionProvider；不要装 onnxruntime-gpu
+onnxruntime>=1.18
+# 仅导出 YOLO .mlpackage 时需要；推理由 ultralytics/CoreML 调用
+coremltools>=7.0
+# 注意：ultralytics 会拉 opencv-python；装完后必须重新覆盖 contrib：
+#   pip install --force-reinstall --no-deps opencv-contrib-python
+# 可选：离线 TSDF（Apple Silicon wheel 视版本，默认不装）
+# open3d>=0.18

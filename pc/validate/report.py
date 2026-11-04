@@ -64,7 +64,7 @@ def synchronization_block(sim: Optional[Dict[str, Any]]) -> str:
         },
     ]
     note = (
-        "> ⚠️ 上表是**离线同步仿真**（`pi.sync.simulate_sync`），用于验证控制环方向与收敛性，"
+        "> ⚠️ 上表是**离线同步仿真**（`shared.sync_sim.simulate_sync`），用于验证控制环方向与收敛性，"
         "不是实机测量。实机数字必须在 Pi 仓库用 `python -m pi.tools.timestamp_baseline` 采集。\n\n"
     )
     return note + markdown_table(rows, ["阶段", "中位数 (ms)", "IQR (ms)", "P25 (ms)", "P75 (ms)"])

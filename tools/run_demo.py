@@ -31,8 +31,8 @@ from pc.validate.metrics import (
     object_error_rows,
     summarize_rows,
 )
-from pi.sync.p_controller import simulate_sync
 from shared.config import config_to_dict, load_config
+from shared.sync_sim import simulate_sync
 from shared.stats import fmt, markdown_table, summarize
 from shared.synthetic import SceneConfig, SyntheticScene, default_objects, generate_calibration_views
 

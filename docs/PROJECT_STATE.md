@@ -1,10 +1,10 @@
 # 项目状态交接（给下一个 AI / 工程师）
 
-> 更新时间：2026-11-01
+> 更新时间：2026-11-04（双 IMX219 实机检查后）
 > 仓库根目录（本仓库）：Linux 本地 `/home/chenai/桌面/深度/macos-pc`；Mac `~/Desktop/stereo-depth`。
 > 本仓库只含 **PC/macOS 端**；Pi 采集端是另一个独立仓库（本地 `../raspberry-pi`）。
 > 当前提交：拆分前 `e35346e`；根目录 `.git` 即将由用户删除并在两个子目录分别重建。
-> 当前工作区：macOS/Docker 后端、模型资产与 adaptive ROI 说明更新（未提交）；**80 个 PC 测试**通过；macOS 原生基础链路已在 Apple M2 验证；`models/` 只放预下载权重，默认路径不加载。
+> 当前工作区：macOS/Docker 后端、模型资产、相机检查与同步启动修正（未提交）；**80 个 PC 测试**、**20 个 Pi 测试**通过；双 IMX219 已能采集，但**未刚性固定**，计划 **2026-11-05 做刚性支架**。
 
 ---
 
@@ -24,12 +24,13 @@
 
 **现在能做什么：**
 没有相机也能用**合成场景 + 录制回放**跑完整链路：标定、SGBM、融合、物体 3D、点云、压缩量化、报告。Pi↔PC 的 ZMQ 链路已在本机回环验证。`models/` 已预下载 YOLOv8n 与 Fast-FoundationStereo ONNX，但默认路径不加载，见 3.4。
+**双 IMX219 实机采集已验证**：枚举、单相机出图、Picamera2 双实例 640×480 都通过；未加控制的初始时间戳差约 52.8 ms，P 环 200 帧可到约 0.56 ms。
 
 **现在不能做什么：**
-实机相机采集、真实镜头标定、真实同步、真实精度、目标 PC 帧率、ROS 2/Foxglove/RTAB-Map/Nav2 运行期，都还没有验证。学习型匹配器（阶段三）只有预下载的 ONNX，没有任何实测；本机也没有 onnxruntime/GPU。
+实机**刚性固定、真实镜头标定、真实尺度/精度、运动同步、目标 PC 帧率、ROS 2/Foxglove/RTAB-Map/Nav2 运行期**，都还没有验证。相机虽然已能采集，但未固定，标定结果不可复现；`cam1` 还需要调焦。学习型匹配器（阶段三）只有预下载的 ONNX，没有任何实测；本机也没有 onnxruntime/GPU。
 
 **下一步最重要的事：**
-相机到货后先做“第一天基线”（时间戳差 + 运动抖动 + 真实标定），再谈精度；ROS 2 相关只在装了 ROS 2 的机器上验证；模型权重只在目标 PC 上验证，不要在本机拿 `.pt`/ONNX 冒充延迟数字。
+相机已到，**2026-11-05 先做刚性支架并给 `cam1` 调焦**；固定后再做第一天基线（时间戳差 + 运动抖动）、真实标定和已知距离验收。固定前不要采标定板。ROS 2 相关只在装了 ROS 2 的机器上验证；模型权重只在目标 PC 上验证，不要在本机拿 `.pt`/ONNX 冒充延迟数字。
 
 ---
 
@@ -89,19 +90,34 @@ SGBM 是**度量锚点**。学习型匹配器只是阶段三的候选补全路�
 
 | 层 | 状态 | 证据 / 说明 |
 |---|---|---|
-| PC 核心管线（校正→SGBM→融合→物体→点云） | ✅ 合成验证通过 | 75 测试；`runs/demo/report.md` |
-| Pi 采集/同步/推流代码 | ✅ 代码完成；❌ 实机未测 | 相机未到；合成后端/回放可用 |
+| PC 核心管线（校正→SGBM→融合→物体→点云） | ✅ 合成验证通过 | 80 测试；`runs/demo/report.md` |
+| Pi 采集/同步/推流代码 | ✅ 双 IMX219 枚举/单帧/双实例采集已验证；❌ 刚性固定/标定未做 | 2026-11-04 实测，见 Pi 仓库 `docs/camera_check.md` |
 | Pi↔PC ZMQ 链路 | ✅ 本机回环通过 | 6 对帧 `emitted=6, orphans=0`；`runs/live_link` |
 | 双目标定 | ✅ 合成 + 录制目录验证 | 15 视图 RMS 0.047 px；录制 14 对视图中位 |
-| 物体级 3D + 地面约束 | ✅ 合成验证 | `|ΔZ|` 中位 1.2 mm；`|ΔY|` 近目标 7.1→0.7 mm |
+| 物体级 3D + 地面约束 | ✅ 合成验证 | `\|ΔZ\|` 中位 1.2 mm；`\|ΔY\|` 近目标 7.1→0.7 mm |
 | 点云 + 体素降采样 | ✅ 合成/回放验证 | 20,620 → 3,518 点（0.03 m） |
 | ROS 2 发布节点 | ✅ 代码完成；❌ 运行期未验证 | 本机没有 ROS 2 |
 | Foxglove / RTAB-Map / Nav2 配置 | ✅ 文档/参数完成；❌ 未跑 | `docs/ros2_foxglove.md`、`ros2/config/` |
 | YOLO 检测 | ⚠️ 权重已预下载；❌ 精度未验证 | `models/yolov8n.pt`；本机无 ultralytics/引擎；默认仍退彩色连通域 |
 | 学习型匹配器（阶段三） | ⚠️ ONNX 已预下载；❌ 未实测 | `models/c_fast_foundationstereo_bp2_dynbatch_dynhw.onnx`；无 GPU/onnxruntime、无数字 |
 | TSDF（阶段四） | ⚠️ 代码完成；❌ 未跑 | 缺 Open3D、缺位姿；不作为主线 |
-| 实机真实精度/同步/CPU/延迟 | ❌ 全部待测 | 相机未到；目标 PC 未测试 |
+| 实机真实精度/同步/CPU/延迟 | ❌ 精度/尺度/运动同步待测 | 相机已连接但未固定；目标 PC 未测试；采集与 P 环已实测 |
 | 运动边界 / 准静态速度上界 | ⚠️ 工具就绪；❌ 未测 | `tools/motion_jitter.py` |
+
+### 2.1 2026-11-04 双 IMX219 实机检查（新增）
+
+| 项 | 结果 |
+|---|---|
+| 枚举 | `rpicam-hello --list-cameras` 看到 2 个 `imx219`：`i2c@88000`（cam0）与 `i2c@80000`（cam1） |
+| 单相机 | `rpicam-still --camera 0/1` 均 exit 0；cam0 正常，cam1 失焦（镜头未固定） |
+| 双实例 | `Picamera2Backend(640x480, fps=30, buffer_count=3)` 连续采集成功 |
+| 未控制时间戳差 | `median 52.7650 ms`，`P25 52.7632`，`P75 52.7657`，`IQR 0.0025`，`std 0.0043` |
+| P 环 200 帧 | 最后 10 帧 `1.07 → 0.56 ms`；最后 50 帧 `median 3.622`，`min 0.558`，`max 10.793` |
+| 启动收敛 | 约 150–200 帧（5–7 s @30fps）；服务前 ~131 对被判坏对丢弃，之后稳定 |
+| 旋转 | 两个相机都报 `Rotation=180`；如画面方向不合适，采集/校正前统一转 180° |
+| 测试 | Pi 仓库 20 tests OK；PC 仓库 80 tests OK |
+
+**边界：** 当前只能证明“相机与 CSI 链路正常、能出图、能配对”；不能证明基线长度、镜头畸变、曝光同步或运动场景精度。详见 Pi 仓库 `docs/camera_check.md`。
 
 ---
 
@@ -560,7 +576,7 @@ learned 只填 (~sgbm_ok) & learned.valid
     --out runs/demo/calib/stereo_calib.npz --views 15
 ```
 
-### 8.4 真实标定（相机到货后）
+### 8.4 真实标定（刚性固定后）
 
 ```bash
 # 目录模式：左右目录文件名排序一一对应
@@ -597,7 +613,7 @@ learned 只填 (~sgbm_ok) & learned.valid
 > 下面的 `pi.*` 命令在独立仓库 `raspberry-pi/` 执行；本仓库只有 `pc.*`。
 
 ```bash
-# Pi 仓库：采集 + 同步 + 推流（相机到货后）
+# Pi 仓库：采集 + 同步 + 推流（刚性固定后）
 python -m pi.service --config configs/pi.yaml --record-root data/recordings/run1
 
 # PC：最小接收器（先启动它，再让 Pi 发）
@@ -686,7 +702,7 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 
 | 风险/缺口 | 现状 | 影响 | 下一步 |
 |---|---|---|---|
-| 相机未到 | 无实机图像 | 所有真实精度/同步结论不成立 | 到货后先跑 day1 基线 |
+| 相机未固定 | 轻微碰触即改变基线/视角 | 标定与尺度结果不可复现 | 先做刚性支架，再采标定板；当前只验证“能采集” |
 | Picamera2 双实例 | 代码完成，未跑 | 可能遇到 CSI 排线/相机枚举/`SensorTimestamp` 问题 | `rpicam-hello --list-cameras`，再跑 `timestamp_baseline` |
 | 时间戳差 ≠ 曝光同步 | 只有仿真 | 时间戳好看但运动抖动大 | 用运动纹理板的 SGBM 质心抖动判定 |
 | 真实标定质量 | 只有合成/录制 | 畸变、装配刚性、温度漂移未知 | 15–25 对视图，查 RMS/极线 |
@@ -703,15 +719,16 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 
 ## 11. 下一步优先级（给下一个会话）
 
-### P0：相机到货后的第一天
+### P0：2026-11-05 刚性固定 + 第一天基线
 
-1. `rpicam-hello --list-cameras` 确认两个 IMX219；
-2. 跑 `pi.tools.timestamp_baseline --frames 100`（不推流、不加控制），记录中位数/IQR；
-3. 再跑 `--with-control`，比较 P 环前后；
-4. 用慢速运动纹理板记录 SGBM 质心深度抖动（时间戳差好看不代表曝光同步）；
-5. 拍 15–25 对棋盘格，跑真实标定，检查 RMS/极线；
-6. 0.3/0.8/1.5 m 已知距离目标，输出无/有地面约束误差表；
-7. 记录 Pi 全开 CPU/温度/是否降频；记录端到端延迟。
+1. **先做刚性支架**：两个模组锁死、`cam1` 调焦；用卷尺记录近似基线，但最终仍以标定 `T` 模长为准；
+2. `rpicam-hello --list-cameras` 再确认两个 IMX219；
+3. 跑 `pi.tools.timestamp_baseline --frames 100`（不推流、不加控制），记录中位数/IQR；当前未固定读数约 `52.8 ms`，固定后应重测；
+4. 再跑 `--with-control --frames 200`，比较 P 环前后；当前可压到约 `0.56 ms`，固定后重测；
+5. 用慢速运动纹理板记录 SGBM 质心深度抖动（时间戳差好看不代表曝光同步）；
+6. 拍 15–25 对棋盘格，跑真实标定，检查 RMS/极线；
+7. 0.3/0.8/1.5 m 已知距离目标，输出无/有地面约束误差表；
+8. 记录 Pi 全开 CPU/温度/是否降频；记录端到端延迟。
 
 ### P1：机器人接入
 
@@ -761,6 +778,7 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 | Mac 首次执行/搬运 | `docs/PC_MACOS_START.md` |
 | macOS 配置/依赖 | `configs/pc_macos.yaml`、`requirements-macos.txt` |
 | 预下载模型 | `models/README.md`、`models/SHA256SUMS` |
+| 相机实机检查 | Pi 仓库 `docs/camera_check.md` |
 
 ---
 
@@ -783,11 +801,13 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 
 > 先读 `docs/PROJECT_STATE.md`（本文件）和 `README.md`。
 > 当前主线是机器人双目感知，不是 3D 建模；默认纯 SGBM，96 视差，0.03 m 体素，ROS 2 发布代码已写但本机没装 ROS 2。
-> 相机未到，不要假设任何实机数字；先跑 80 个 PC 测试和 `tools.run_demo`，再从 `docs/acceptance.md` 的“尚未完成”清单继续。
+> 相机已连接且采集已验证，但**未固定**；**2026-11-05 先做刚性支架并给 cam1 调焦**，固定前不要标定。
+> 先在 Pi 仓库看 `docs/camera_check.md`，再跑 80 个 PC 测试和 `tools.run_demo`，
+> 最后按 `docs/acceptance.md` 的“尚未完成”清单继续。
 > 改代码前先看 `docs/interfaces.md` 的数据契约；改融合规则前先看 `docs/stage3.md` 的“SGBM 优先、不平均”。
 
 ---
 
 ## 15. 一句话交接
 
-**这是一个能跑、能测、能出报告的实时双目感知基线：合成/回放链路完整，机器人 ROS 2 接入代码就绪；实机相机、真实标定/同步、目标 PC 帧率、ROS 2 运行期和学习型匹配器仍未验证。**
+**这是一个能跑、能测、能出报告的实时双目感知基线：合成/回放链路完整，机器人 ROS 2 接入代码就绪；双 IMX219 实机采集已验证，但尚未刚性固定；真实标定/尺度/运动同步、目标 PC 帧率、ROS 2 运行期和学习型匹配器仍未验收。**

@@ -6,8 +6,8 @@
 
 | # | 交付物 | 代码/文件 | 当前状态 |
 |---|---|---|---|
-| 1 | Pi 5 采集 + 同步 + 推流服务 | `pi/service.py`、`pi/capture/`、`pi/sync/`、`pi/stream/` | 完成；实机未测 |
-| 2 | 时间戳配对分布 + 压缩伪影量化报告 | `pi/tools/timestamp_baseline.py`、`tools/compression_report.py` | 工具完成；实机数据待采 |
+| 1 | Pi 5 采集 + 同步 + 推流服务 | `pi/service.py`、`pi/capture/`、`pi/sync/`、`pi/stream/` | 双 IMX219 采集/同步已实机验证；推流实机待测 |
+| 2 | 时间戳配对分布 + 压缩伪影量化报告 | `pi/tools/timestamp_baseline.py`、`tools/compression_report.py` | 时间戳已实测（52.8 ms → 0.56 ms）；压缩伪影待实机 |
 | 3 | 双目标定参数 + 校正映射 + 极线检查 | `pc/calib/`、`pc/rectify/`、`data/calib/stereo_calib.npz` | 完成（合成验证） |
 | 4 | PC 完整处理管线 | `pc/pipeline.py`、`pc/receive/live.py` | 完成 |
 | 5 | 物体级 3D JSON + 体素点云 PLY | `pc/objects/`、`pc/depth/`、`runs/demo/objects.json`、`cloud.ply` | 完成 |
@@ -23,7 +23,7 @@
 | 指标 | 目标 | 当前（合成/Pi 5） | 结论 |
 |---|---|---|---|
 | 端到端帧率 | 25–30 fps（Pi 推流） | 推流链路未在实机跑；PC 处理约 266 ms/帧（3.75 fps，Pi 5 本机） | 待测 |
-| 时间戳差 | 中位数/IQR 记录在案 | 仿真 12.8 ms → 0.001 ms | 控制环验证通过，实机待测 |
+| 时间戳差 | 中位数/IQR 记录在案 | 实测 52.765 ms（IQR 0.0025）→ 0.56 ms（200 帧 P 环） | 采集/P 环通过；未固定，固定后重测 |
 | 运动纹理板深度抖动 | 记录在案 | 工具就绪 | 待测 |
 | Pi CPU | 无核心持续满载 | 采集+编码+推流未测；本机只跑了 PC 端 SGBM | 待测 |
 | 压缩伪影 | 深度偏移 < 1–2% | H.264 2.5 Mbps：0.41%；800 kbps：0.31% | 合成通过 |

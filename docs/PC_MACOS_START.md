@@ -70,7 +70,7 @@ Pi 5 双 IMX219 ──ZMQ──► PC
 | 项 | 状态 |
 |---|---|
 | 合成/回放全链路（标定→SGBM→点云→物体） | ✅ Pi 与 macOS M2 均跑通；80 tests（Mac 2 skip） |
-| 真实相机、真实标定、真实同步 | ❌ 相机未到，未测 |
+| 真实相机、真实标定、真实同步 | ⚠️ 双 IMX219 已能采集；未固定、未标定 |
 | macOS 原生基础链路 | ✅ Apple M2 已验证：demo 20.27 fps、3 对回放 9.56 fps |
 | macOS CoreML | ⚠️ `CoreMLExecutionProvider` 已可见；YOLO/FFS 推理未跑 |
 | Docker ROS 2 | ❌ Docker 未安装，未构建 |

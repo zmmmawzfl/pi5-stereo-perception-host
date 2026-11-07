@@ -161,6 +161,13 @@ python -m pc.receive.live \
 
 ### 6.4 接 Pi 实时流
 
+默认 JPEG q90。若要做 640×640 无损/链路评估，可切 `stream.encoding: raw_bgr8`；
+带宽与推荐见 [docs/transport.md](docs/transport.md)，先算再切：
+
+```bash
+python -m tools.transport_budget --width 640 --height 640 --fps 30
+```
+
 先启动 PC 接收器，再启动 Pi（ZMQ PUB 不保留历史）：
 
 ```bash
@@ -224,6 +231,7 @@ docker compose exec ros2 bash -lc '
 ```text
 macos-pc/
 ├── pc/
+│   ├── receive/        # ZMQ/回放统一帧对来源 + 在线管线
 │   ├── calib/          # 单目→双目、stereoRectify、极线检查
 │   ├── rectify/        # remap 去畸变 + 极线校正
 │   ├── stereo/         # SGBM（ROI/scale）、右目视差、ONNX 适配器
@@ -235,7 +243,7 @@ macos-pc/
 │   ├── validate/       # 误差、覆盖率、压缩、运行资源、报告
 │   └── pipeline.py     # 端到端编排
 ├── shared/             # SDP1、配置、统计、合成场景、同步仿真
-├── tools/              # run_demo / compression_report / motion_jitter
+├── tools/              # run_demo / compression_report / motion_jitter / transport_budget
 ├── configs/            # default / pc / pc_macos
 ├── ros2/               # RTAB-Map / Nav2 参数与 launch
 ├── docs/               # 接口、验收、阶段三、macOS/Docker、交接
@@ -273,6 +281,7 @@ macos-pc/
 | 阶段三学习型对照 | [docs/stage3.md](docs/stage3.md) |
 | 验收映射 | [docs/acceptance.md](docs/acceptance.md) |
 | Pi↔PC 联调 | [docs/runbook.md](docs/runbook.md) |
+| 640×640 链路/raw 预算 | [docs/transport.md](docs/transport.md) |
 | Pi 边缘端 | [pi5-stereo-perception-edge](https://github.com/zmmmawzfl/pi5-stereo-perception-edge) |
 
 ## 12. 模型与许可

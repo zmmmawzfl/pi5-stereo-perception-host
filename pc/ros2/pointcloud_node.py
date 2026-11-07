@@ -26,31 +26,15 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Iterator, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 
 from pc.calib.calibrate import CalibrationResult
 from pc.depth.pointcloud import cloud_from_result
 from pc.pipeline import build_pipeline
-from pc.receive.subscriber import ZmqPairSource
+from pc.receive.sources import PairFeed
 from shared.config import load_config
-from shared.recording import PairReplay
-
-
-def _iter_pairs(
-    endpoint: str, replay_root: Optional[str], max_pairs: Optional[int], idle: float
-) -> Iterator[Tuple[int, int, np.ndarray, np.ndarray]]:
-    """统一的帧对来源：在线 ZMQ 或录制目录回放。"""
-    if replay_root:
-        for i, (rec, left, right) in enumerate(PairReplay(replay_root)):
-            yield rec.pair_id, rec.ts_diff_ns, left, right
-            if max_pairs and i + 1 >= max_pairs:
-                break
-        return
-    src = ZmqPairSource(endpoint)
-    for rp in src.pairs(max_pairs=max_pairs, idle_timeout_s=idle):
-        yield rp.pair_id, rp.ts_diff_ns, rp.left, rp.right
 
 
 def _pack_pointcloud2(PointCloud2, PointField, points: np.ndarray, colors: np.ndarray,
@@ -163,16 +147,20 @@ def run(args: argparse.Namespace) -> int:
 
     stop = threading.Event()
     stats = {"pairs": 0, "points": 0, "latency_ms": []}
+    feed = PairFeed(
+        endpoint=args.endpoint,
+        replay_root=args.replay_root,
+        max_pairs=args.max_pairs,
+        idle_timeout_s=args.idle_timeout,
+    )
 
     def loop() -> None:
         try:
-            for pair_id, skew_ns, left, right in _iter_pairs(
-                args.endpoint, args.replay_root, args.max_pairs, args.idle_timeout
-            ):
+            for item in feed:
                 if stop.is_set():
                     break
                 t0 = time.perf_counter()
-                result = pipeline.process(left, right)
+                result = pipeline.process(item.left, item.right)
                 stamp = node.get_clock().now().to_msg()
                 points, colors = cloud_from_result(
                     result, calib, stride=stride,
@@ -184,8 +172,8 @@ def run(args: argparse.Namespace) -> int:
                     depth_pub.publish(_pack_image(Image, result.depth, "16UC1", frame_id, stamp))
                     info_pub.publish(_pack_camera_info(CameraInfo, calib, frame_id, stamp))
                 payload = {
-                    "pair_id": pair_id,
-                    "skew_ms": skew_ns / 1e6,
+                    "pair_id": item.pair_id,
+                    "skew_ms": item.skew_ns / 1e6,
                     "objects": [o.to_dict() for o in result.objects],
                     "coverage": float(result.fused.coverage),
                     "timings_ms": {k: round(v, 3) for k, v in result.timings_ms.items()},
@@ -206,6 +194,8 @@ def run(args: argparse.Namespace) -> int:
         except Exception as exc:  # pragma: no cover - 线程内异常要能看见
             node.get_logger().error(f"receive loop 停止: {exc}")
         finally:
+            if feed.stats is not None:
+                node.get_logger().info(f"pairing: {feed.stats.as_dict()}")
             stop.set()
 
     worker = threading.Thread(target=loop, name="stereo-receive", daemon=True)

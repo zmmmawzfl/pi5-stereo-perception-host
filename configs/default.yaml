@@ -19,6 +19,7 @@ sync:
 stream:
   transport: zmq           # zmq | none
   endpoint: tcp://0.0.0.0:5555
+  encoding: jpeg           # jpeg | raw_bgr8；raw 只建议在 1GbE 直连/评估时用
   jpeg_quality: 90
   raw_max_pairs: 0
   h264_bitrate_kbps: 2500

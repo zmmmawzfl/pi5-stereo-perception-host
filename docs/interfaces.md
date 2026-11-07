@@ -34,7 +34,8 @@ header 字段：
 ```
 
 - `pair_id` 由 Pi 端递增分配；配对**只认它**，不认到达顺序。
-- `enc`：`jpeg`（推流）/ `raw_bgr8`（无损旁路）/ `h264`（预留）。
+- `enc`：`jpeg`（默认推流）/ `raw_bgr8`（无损，带宽高；`stream.encoding` 可切）/
+  `h264`（协议预留，当前 ZMQ 链路未实现编码器）。
 - `side` 只能是 `left` / `right`。
 - 解码后必须是 BGR `uint8`，形状 `(h,w,3)`。
 

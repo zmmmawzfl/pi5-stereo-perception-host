@@ -43,10 +43,21 @@ class StreamConfig:
     # "zmq" | "none" | "file"
     transport: str = "zmq"
     endpoint: str = "tcp://0.0.0.0:5555"
+    # "jpeg"（默认，低带宽）| "raw_bgr8"（无损，高带宽；用于 640x640/1GbE 评估）
+    encoding: str = "jpeg"
     jpeg_quality: int = 90
     # 无损帧旁路（用于压缩伪影量化）
     raw_max_pairs: int = 0
     h264_bitrate_kbps: int = 2500
+
+    def __post_init__(self) -> None:
+        self.encoding = str(self.encoding).lower()
+        if self.encoding not in ("jpeg", "raw_bgr8"):
+            raise ValueError(
+                f"stream.encoding={self.encoding!r} 不支持；可选 jpeg/raw_bgr8"
+            )
+        if not 1 <= int(self.jpeg_quality) <= 100:
+            raise ValueError("stream.jpeg_quality 必须在 1..100")
 
 
 @dataclass

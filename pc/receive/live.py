@@ -16,35 +16,18 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Iterator, Optional, Tuple
+from typing import Optional
 
 import cv2
-import numpy as np
 
 from pc.calib.calibrate import CalibrationResult
 from pc.depth.pointcloud import cloud_from_result, write_ply
 from pc.pipeline import build_pipeline
-from pc.receive.subscriber import ZmqPairSource
-from pc.validate.runtime import ResourceMonitor
+from pc.receive.sources import PairFeed
+from pc.validate.resources import ResourceMonitor
 from pc.validate.visualize import draw_objects, source_map
 from shared.config import load_config
-from shared.recording import PairReplay
 from shared.stats import summarize
-
-
-def _iter_zmq(endpoint: str, max_pairs: Optional[int], idle: float) -> Iterator[Tuple[int, int, np.ndarray, np.ndarray]]:
-    src = ZmqPairSource(endpoint)
-    try:
-        for rp in src.pairs(max_pairs=max_pairs, idle_timeout_s=idle):
-            yield rp.pair_id, rp.ts_diff_ns, rp.left, rp.right
-    finally:
-        print(json.dumps({"pairing": src.stats.as_dict()}, ensure_ascii=False))
-
-
-def _iter_replay(root: str) -> Iterator[Tuple[int, int, np.ndarray, np.ndarray]]:
-    replay = PairReplay(root)
-    for rec, left, right in replay:
-        yield rec.pair_id, rec.ts_diff_ns, left, right
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -68,16 +51,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "objects.jsonl").write_text("", encoding="utf-8")
 
-    source = _iter_replay(args.replay_root) if args.replay_root else _iter_zmq(
-        args.endpoint, args.max_pairs, args.idle_timeout
+    feed = PairFeed(
+        endpoint=args.endpoint,
+        replay_root=args.replay_root,
+        max_pairs=args.max_pairs,
+        idle_timeout_s=args.idle_timeout,
     )
     frames = 0
     timings = []
     monitor = ResourceMonitor()
     t_start = time.time()
     try:
-        for pair_id, skew_ns, left, right in source:
-            result = pipeline.process(left, right)
+        for item in feed:
+            result = pipeline.process(item.left, item.right)
             cloud_points = None
             if args.save_cloud_every and (frames + 1) % args.save_cloud_every == 0:
                 pts, cols = cloud_from_result(
@@ -89,8 +75,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 write_ply(out / f"cloud_{frames + 1:05d}.ply", pts, cols)
                 cloud_points = len(pts)
             record = {
-                "pair_id": pair_id,
-                "skew_ms": skew_ns / 1e6,
+                "pair_id": item.pair_id,
+                "skew_ms": item.skew_ns / 1e6,
                 "wall_ns": time.time_ns(),
                 "objects": [o.to_dict() for o in result.objects],
                 "timings_ms": {k: round(v, 3) for k, v in result.timings_ms.items()},
@@ -106,14 +92,15 @@ def main(argv: Optional[list[str]] = None) -> int:
                             draw_objects(result.rectified_left, result.objects, calib))
                 cv2.imwrite(str(out / f"source_{frames:05d}.png"), source_map(result.fused))
             print(
-                f"[live] pair={pair_id} objects={len(result.objects)} "
+                f"[live] pair={item.pair_id} objects={len(result.objects)} "
                 f"total={result.timings_ms['total']:.0f}ms",
                 flush=True,
             )
-            if args.max_pairs and frames >= args.max_pairs:
-                break
     except KeyboardInterrupt:
         print("\n[live] 中断", flush=True)
+    finally:
+        if feed.stats is not None:
+            print(json.dumps({"pairing": feed.stats.as_dict()}, ensure_ascii=False))
 
     elapsed = max(time.time() - t_start, 1e-6)
     summary = {

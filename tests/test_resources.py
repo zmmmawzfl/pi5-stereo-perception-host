@@ -1,10 +1,10 @@
 import time
 import unittest
 
-from pc.validate.runtime import ResourceMonitor
+from pc.validate.resources import ResourceMonitor
 
 
-class RuntimeMonitorTest(unittest.TestCase):
+class ResourceMonitorTest(unittest.TestCase):
     def test_snapshot_has_resources(self):
         m = ResourceMonitor()
         time.sleep(0.02)

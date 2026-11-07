@@ -272,6 +272,7 @@ macos-pc/
 ├── pc/
 │   ├── receive/
 │   │   ├── subscriber.py       # ZMQ SUB + PairAssembler
+│   │   ├── sources.py          # PairFeed：统一 ZMQ/回放帧对来源
 │   │   ├── record_pairs.py      # PC 端最小接收器（落盘）
 │   │   └── live.py              # 在线/回放管线，写 JSON/overlay/PLY
 │   ├── calib/
@@ -297,7 +298,7 @@ macos-pc/
 │   │   ├── metrics.py          # 误差、覆盖率、物体匹配
 │   │   ├── compression.py      # JPEG/H.264 往返量化
 │   │   ├── report.py           # Markdown 报告
-│   │   ├── runtime.py          # 进程级 CPU/内存
+│   │   ├── resources.py        # 进程级 CPU/内存
 │   │   └── visualize.py        # overlay/source map
 │   └── pipeline.py             # 端到端编排
 ├── shared/
@@ -772,6 +773,7 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 | 验收/风险 | `docs/acceptance.md` |
 | 接口契约 | `docs/interfaces.md` |
 | 联调排障 | `docs/runbook.md` |
+| 640×640 链路预算 | `docs/transport.md`、`tools/transport_budget.py` |
 | ROS/Foxglove | `docs/ros2_foxglove.md` |
 | 阶段三 | `docs/stage3.md` |
 | macOS/Docker | `docs/macos_docker.md`、`docker-compose.yml`、`docker/Dockerfile.ros2` |

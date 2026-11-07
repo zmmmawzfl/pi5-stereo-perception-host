@@ -40,7 +40,7 @@
 | macOS CoreML provider | `pc.runtime` 能选到 CoreML | `CoreMLExecutionProvider` 已可见 | provider 通过；YOLO/FFS 推理未跑 |
 | Docker ROS 2（Humble） | 话题/字段/Foxglove 可通 | `docker/Dockerfile.ros2` + compose | Docker 未安装/未构建 |
 | Foxglove 可视化 | 可看 | 字段与配置说明就绪 | 未运行 |
-| CPU/内存 | 有进程级观测 | `pc.validate.runtime` + live `resources` | 工具就绪，实机待测 |
+| CPU/内存 | 有进程级观测 | `pc.validate.resources` + live `resources` | 工具就绪，实机待测 |
 | 学习型三项 | 有明确结论 | **未执行** | 待目标 PC |
 
 ## 3. 风险 → 代码落点

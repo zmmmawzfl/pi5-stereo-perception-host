@@ -110,6 +110,18 @@ flowchart LR
 
 ## 6. 快速开始
 
+### 6.0 任意 Linux（x86_64 / arm64，无需编译）
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+make deps      # 自动选 requirements-linux-cpu.txt（无 GPU）/ requirements-pc.txt（NVIDIA）
+make test      # 80 项
+make demo
+```
+
+> 视觉链路是纯 Python，依赖都是预编译 wheel（OpenCV 自带 ximgproc），**不需要编译**；只有 ROS 2 才要额外安装或容器。
+> 选型矩阵、镜像复用（tar 搬运 / buildx 多架构一次构建）与常见坑见 [docs/portability.md](docs/portability.md)。
+
 ### 6.1 macOS（原生，CoreML 可选）
 
 ```bash

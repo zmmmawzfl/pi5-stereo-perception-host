@@ -24,6 +24,10 @@ ping <PI_IP>                    # 先确认二层可达
 python -c "import cv2, zmq; print(cv2.__version__)"
 ```
 
+**Linux PC（任意发行版/架构）：** 视觉链路原生 `pip install -r requirements-linux-cpu.txt`（NVIDIA 机器用
+`requirements-pc.txt`），**不需要编译**；ROS 2 优先用发行版 apt，只有没有原生 ROS 2 时才用容器。
+选型矩阵与镜像复用（tar / buildx）见 [`docs/portability.md`](portability.md)。
+
 **macOS PC：** 视觉链路用 `requirements-macos.txt` 在原生跑；ROS 2/Foxglove 用
 `docker compose`（Humble，纯 CPU），不需要在 Mac 上装 ROS 2。详见
 [`docs/macos_docker.md`](macos_docker.md)。先在原生确认

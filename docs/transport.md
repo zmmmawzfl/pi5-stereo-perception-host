@@ -113,3 +113,55 @@ python -m pc.receive.record_pairs --endpoint tcp://<PI_IP>:5555 --out data/recor
 
 640×640 的 JPEG 数字、raw 的 orphans、jumbo frame 收益都还没有实机测；
 相机恢复后应按 `docs/acceptance.md` 的“压缩伪影”与“链路”两节补测。
+
+## 7. 实机记录（2026-11-14，Pi 5 ↔ x86 Ubuntu，640×480）
+
+链路：Pi `eth0` ↔ x86 `enp1s0` 网线直连；**两端都通告 1000baseT，但实协商 100 Mb/s**，
+python socket 实测 90–94 Mbps（100 MB 传 8.9 s）。所以本节结论受 **百兆** 限制，不是千兆成绩。
+
+### 7.1 jpeg（生产默认）
+
+```
+Pi:  pi.service --backend picamera2 --encoding jpeg --frames 300
+PC:  pc.receive.record_pairs --endpoint tcp://10.42.0.1:5555 --max-pairs 300
+```
+
+| 项 | 数值 |
+|---|---|
+| 发送 / 接收 | 600 帧 → 600 帧（**0 丢**），emitted 300 对，duplicates/orphans/out_of_order 全 0 |
+| 左右时间戳差 `ts_diff_ms` | median **0.218 ms**，p90 14.65，max 24.87 |
+| 单帧大小 | **13.2 KiB**（约 0.108 Mbit） |
+| 码率 | 约 **2.2 Mbps/目**（20 fps 采集时），双路约 4.3 Mbps |
+| Pi 采集 | 380 对（dropped 80），skew median **0.219 ms**（300 帧后已收敛） |
+
+结论：jpeg 在百兆上**毫无压力**，链路不是瓶颈。
+
+### 7.2 raw_bgr8（链路评估用）
+
+```
+Pi:  --encoding raw_bgr8 --frames 150
+PC:  pc.receive.record_pairs --max-pairs 150
+```
+
+| 项 | 数值 |
+|---|---|
+| 单帧 | **900 KiB**（640×480×3 = 921,600 B） |
+| 发送 | 300 帧 = **276.5 MB** |
+| 接收 | 仅 68 帧 / 34 对（**约 77% 丢失**） |
+| 原因 | 百兆链路：raw 需 7.37 Mbit/帧，理论上限约 12.7 帧/s = **6.3 对/s** |
+
+结论：raw_bgr8 要跑 30 fps，**必须先把链路修到千兆**（442 Mbps 预算见第 2 节）。
+在百兆上 raw 只适合低频调试。
+
+### 7.3 端到端（真实相机 → 校正 → SGBM → 点云）
+
+x86 上 `pc.receive.live --max-pairs 30`（**合成标定**，深度数值无意义，只看链路与耗时）：
+
+| 项 | 数值 |
+|---|---|
+| 30 对耗时 / fps | 8.909 s → **3.37 fps** |
+| 单对处理 | median **153 ms**（p90 174） |
+| CPU / 内存 | 112.7%（单核多线程） / peak RSS 204 MB |
+
+3.37 fps ≈ 本地 demo 2.78 fps → **网络不构成额外瓶颈**，CPU 仍是 SGBM。
+

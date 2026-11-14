@@ -175,7 +175,9 @@ PC 端（2026-11-01 更新为两种形态）：
 - `requirements.txt`：numpy / PyYAML / pyzmq；
 - `requirements-macos.txt`：OpenCV、ultralytics、`onnxruntime`（CoreML EP）、coremltools；
 - `requirements-pc.txt`：Linux/NVIDIA 的 OpenCV、ultralytics、onnxruntime-gpu、open3d；
+- `requirements-linux-cpu.txt`：通用 Linux（x86_64/aarch64，无 GPU）CPU-only 依赖，`opencv-contrib` 轮子自带 ximgproc，不需要编译；
 - `requirements-dev.txt`：pytest；
+- `docs/portability.md`：跨平台/跨架构选型与镜像复用（tar 搬运、buildx 多架构），何时需要构建、何时不需要；
 - `docker/Dockerfile.ros2` + `docker-compose.yml`：ROS 2 Humble、OpenCV、pyzmq、
   Foxglove bridge、CycloneDDS；无 GPU。
 
@@ -205,7 +207,7 @@ PC 端（2026-11-01 更新为两种形态）：
 
 - 代码入口：`pc/runtime.py`（provider 选择）、`configs/pc_macos.yaml`、
   `requirements-macos.txt`、`docker/Dockerfile.ros2`、`docker-compose.yml`；
-- 详细命令与边界：`docs/macos_docker.md`；
+- 详细命令与边界：`docs/macos_docker.md`；跨平台安装与镜像复用：`docs/portability.md`；`make deps` 按平台自动选依赖；
 - **验证进展（2026-11-01）**：macOS 原生基础链路已在 Apple M2（8 GB、macOS 27.2、
   Python 3.14.6、OpenCV 5.0.0-contrib）跑通：80 PC tests（2 skip）、demo 20.27 fps、
   3 对回放 9.56 fps；`CoreMLExecutionProvider` 已可见。**YOLO/FFS 模型推理、Docker 构建

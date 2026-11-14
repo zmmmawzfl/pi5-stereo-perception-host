@@ -1,0 +1,11 @@
+# 通用 Linux（x86_64 / aarch64，无 NVIDIA GPU）—— CPU-only 依赖。
+# 视觉链路只需要这些；macOS 用 requirements-macos.txt，NVIDIA 机器用 requirements-pc.txt。
+# OpenCV 走 pip 预编译轮子（含 ximgproc），不需要本地编译。
+-r requirements.txt
+opencv-contrib-python>=4.8
+# 检测（阶段二起）
+ultralytics>=8.2
+# 学习型匹配器（阶段三，CPU EP；NVIDIA 机器改用 onnxruntime-gpu）
+onnxruntime>=1.17
+# 可选：TSDF（阶段四）。aarch64 轮子不全，按需再装：
+# open3d>=0.18

@@ -57,6 +57,17 @@ docker run --rm --network host \
 - 镜像里没有 `models/yolov8n.pt`：检测先用 `--detect-backend color`；要跑 YOLO 就把
   `models/` 挂到 `/app/models` 并换 `requirements-linux-cpu.txt` 重建；
 - 这是“跑通链路”的最低门槛；ROS 2 话题、TF 仍然走 `docker/Dockerfile.ros2`。
+- **国内网络拉不动 docker.io 时**（`failed to fetch anonymous token` / `connect: connection refused`）：
+  ```bash
+  docker pull docker.m.daocloud.io/library/python:3.12-slim
+  docker tag  docker.m.daocloud.io/library/python:3.12-slim python:3.12-slim   # 或 --build-arg BASE_IMAGE=...
+  make docker-cpu PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+  ```
+  `BASE_IMAGE` 与 `PIP_INDEX_URL` 都是 Dockerfile 的 build-arg，不改文件就能换源。
+- **实测**（2026-11-15，Ubuntu 26.04 x86_64 / Pentium G4560 / Docker 29）：镜像 620 MB 级，
+  容器内 `import cv2` = 4.14.0（Dockerfile 已把 opencv 钉在 `>=4.8,<5`，5.0 未验证），
+  对 Pi 的 jpeg 流跑 40 对：**3.66 fps**、单对耗时 median 259 ms、CPU 164%、峰值 RSS 111 MB ——
+  与裸机跑（3.37 fps / 359 ms 旧数据）同量级，容器几乎不带来额外开销。
 
 ---
 ## 3. 需要 ROS 2 时：三条路，按机器选

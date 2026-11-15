@@ -5,11 +5,15 @@
 """
 from __future__ import annotations
 
-import resource
 import sys
 import time
 from dataclasses import asdict, dataclass
 from typing import Dict, Optional
+
+try:  # Windows 没有 resource 模块：此时峰值 RSS 返回 None，其余照常
+    import resource
+except ImportError:  # pragma: no cover - 仅 Windows
+    resource = None  # type: ignore[assignment]
 
 
 def _rss_mb() -> Optional[float]:
@@ -24,6 +28,8 @@ def _rss_mb() -> Optional[float]:
 
 
 def _peak_rss_mb() -> Optional[float]:
+    if resource is None:  # pragma: no cover - Windows
+        return None
     try:
         # Linux ru_maxrss 单位是 KiB；macOS 是字节
         val = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)

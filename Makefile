@@ -1,7 +1,7 @@
 PY ?= python3
 CALIB ?= runs/demo/calib/stereo_calib.npz
 
-.PHONY: help test deps demo calib budget clean
+.PHONY: help test deps demo calib budget checker clean docker-cpu docker-ros2
 
 help:
 	@echo "make deps   按平台选 requirements 并安装（Linux CPU / NVIDIA / macOS）"
@@ -9,6 +9,9 @@ help:
 	@echo "make demo   合成场景端到端 demo + 压缩量化"
 	@echo "make calib  生成合成标定文件"
 	@echo "make budget 640x640@30fps 链路预算"
+	@echo "make checker 生成 A3 棋盘格 PDF 到 artifacts/calibration"
+	@echo "make docker-cpu  构建纯 CPU 容器（任意 Docker 主机，跨架构一次构建）"
+	@echo "make docker-ros2 构建 ROS 2 Humble 容器（x86 上已验证）"
 
 deps:
 	@case "$$(uname -s)" in \
@@ -23,3 +26,25 @@ deps:
 
 test:
 	$(PY) -m unittest discover -s tests -t . -v
+
+demo:
+	$(PY) -m tools.run_demo --out runs/demo --frames 8 --compression
+
+calib:
+	$(PY) -m pc.calib.cli synthetic --out $(CALIB) --views 15
+
+budget:
+	$(PY) -m tools.transport_budget --width 640 --height 640 --fps 30
+
+checker:
+	$(PY) -m tools.make_checkerboard --pattern 9x6 --square-mm 30 --page a3 --out ../artifacts/calibration/board_9x6_30mm_a3
+
+docker-cpu:
+	docker build -f docker/Dockerfile.cpu -t stereo-depth-cpu:latest .
+	@echo "运行示例：docker run --rm --network host -v \"\$$PWD/data:/data:ro\" -v \"\$$PWD/runs:/out\" stereo-depth-cpu:latest"
+
+docker-ros2:
+	DOCKER_BUILDKIT=0 docker build --network=host -f docker/Dockerfile.ros2 -t stereo-depth-ros2:humble .
+
+clean:
+	rm -rf runs/replay runs/live runs/compression

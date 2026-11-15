@@ -1,10 +1,11 @@
 .git
-.venv
-__pycache__
-*.pyc
-.pytest_cache
+.gitignore
 runs
-models
 data
 docs
-tests
+models
+artifacts
+**/__pycache__
+*.pyc
+*.pyo
+.venv

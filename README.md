@@ -122,6 +122,20 @@ make demo
 > 视觉链路是纯 Python，依赖都是预编译 wheel（OpenCV 自带 ximgproc），**不需要编译**；只有 ROS 2 才要额外安装或容器。
 > 选型矩阵、镜像复用（tar 搬运 / buildx 多架构一次构建）与常见坑见 [docs/portability.md](docs/portability.md)。
 
+**连 Python 环境都不想装？** 有 Docker 就行（x86_64 / arm64 / macOS / Windows 均可）：
+
+```bash
+make docker-cpu
+docker run --rm --network host \
+  -v "$PWD/data:/data:ro" -v "$PWD/runs:/out" \
+  stereo-depth-cpu:latest \
+  --endpoint tcp://10.42.0.1:5555 --calib /data/calib/stereo_calib.npz --out /out/live
+```
+
+镜像只含 numpy / PyYAML / pyzmq / opencv-contrib-headless，跑的是同一条 `pc.receive.live` 链路
+（没有 YOLO/ROS 2，检测用 `--detect-backend color`）。Docker Desktop 上把 `--network host` 去掉，
+直接把 `--endpoint` 指向 Pi 的 IP。
+
 ### 6.1 macOS（原生，CoreML 可选）
 
 ```bash

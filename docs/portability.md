@@ -39,6 +39,26 @@ python -m tools.run_demo --out runs/demo --frames 8 --compression
 
 ---
 
+## 2.5 只跑实时链路：纯 CPU 容器（任意 Docker 主机）
+
+不需要 ROS 2、不需要 ultralytics，镜像里只有 numpy / PyYAML / pyzmq / opencv-contrib-headless：
+
+```bash
+make docker-cpu                     # 构建 stereo-depth-cpu:latest
+docker run --rm --network host \
+    -v "$PWD/data:/data:ro" -v "$PWD/runs:/out" \
+    stereo-depth-cpu:latest \
+    --endpoint tcp://10.42.0.1:5555 --calib /data/calib/stereo_calib.npz --out /out/live
+```
+
+- Linux 用 `--network host`；Docker Desktop（macOS / Windows）没有 host 网络，但 ZMQ 是
+  **容器主动连 Pi**，所以直接 `--endpoint tcp://<Pi 的 IP>:5555` 就行，不用端口映射；
+- 想一次产多架构：`docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile.cpu .`；
+- 镜像里没有 `models/yolov8n.pt`：检测先用 `--detect-backend color`；要跑 YOLO 就把
+  `models/` 挂到 `/app/models` 并换 `requirements-linux-cpu.txt` 重建；
+- 这是“跑通链路”的最低门槛；ROS 2 话题、TF 仍然走 `docker/Dockerfile.ros2`。
+
+---
 ## 3. 需要 ROS 2 时：三条路，按机器选
 
 1. **Ubuntu 22.04 / 24.04 原生（最省事，零容器）**
@@ -68,7 +88,7 @@ docker save stereo-depth-ros2:humble | gzip -1 > stereo-depth-ros2-humble-amd64.
 docker load < stereo-depth-ros2-humble-amd64.tar.gz
 ```
 
-已导出的样例：`/home/chenai/桌面/PC环境-2026-11-14/stereo-depth-ros2-humble-amd64.tar.gz`（478 MB，sha256 `78ca0e35…c783`）。
+已导出的样例：`artifacts/pc-env-2026-11-14/stereo-depth-ros2-humble-amd64.tar.gz`（478 MB，sha256 `78ca0e35…c783`，在工作区内，不进 git）。
 
 ### 4.2 多架构一次构建（有 registry 时最省事）
 

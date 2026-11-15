@@ -1,0 +1,37 @@
+# 纯 CPU 容器：只打包"实时链路本体"，任何有 Docker 的 x86_64 / arm64 主机都能跑。
+#
+#   docker build -f docker/Dockerfile.cpu -t stereo-depth-cpu:latest .
+#   docker run --rm --network host \
+#       -v "$PWD/data:/data:ro" -v "$PWD/runs:/out" \
+#       stereo-depth-cpu:latest \
+#       --endpoint tcp://10.42.0.1:5555 --calib /data/calib/stereo_calib.npz --out /out/live
+#
+# 这边不装 ROS 2、不装 ultralytics/open3d：检测用 --detect-backend color，
+# TSDF 用不上就是没有。需要 ROS 2 话题再叠加 docker/Dockerfile.ros2。
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    OPENCV_OPENCL_RUNTIME=disabled
+
+# cv2 的 headless 轮子仍可能 dlopen libGL/libglib，装上更稳（体积换兼容性）
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libglib2.0-0 libgl1 \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt \
+ && pip install --no-cache-dir "opencv-contrib-python-headless>=4.8"
+
+COPY pc ./pc
+COPY shared ./shared
+COPY configs ./configs
+COPY tools ./tools
+
+VOLUME ["/data", "/out"]
+
+ENTRYPOINT ["python", "-m", "pc.receive.live"]
+CMD ["--endpoint", "tcp://10.42.0.1:5555", "--calib", "/data/calib/stereo_calib.npz", "--out", "/out/live"]

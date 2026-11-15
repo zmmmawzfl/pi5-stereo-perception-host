@@ -8,7 +8,12 @@
 #
 # 这边不装 ROS 2、不装 ultralytics/open3d：检测用 --detect-backend color，
 # TSDF 用不上就是没有。需要 ROS 2 话题再叠加 docker/Dockerfile.ros2。
-FROM python:3.12-slim
+# 国内网络拉不到 docker.io 时，先把基础镜像从镜像站拉下来再 tag 成同名：
+#   docker pull docker.m.daocloud.io/library/python:3.12-slim
+#   docker tag  docker.m.daocloud.io/library/python:3.12-slim python:3.12-slim
+# 或者直接指定：docker build --build-arg BASE_IMAGE=... -f docker/Dockerfile.cpu .
+ARG BASE_IMAGE=python:3.12-slim
+FROM ${BASE_IMAGE}
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -23,8 +28,11 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt \
- && pip install --no-cache-dir "opencv-contrib-python-headless>=4.8"
+# 国内可加 --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_INDEX_URL=
+RUN if [ -n "${PIP_INDEX_URL}" ]; then pip config set global.index-url "${PIP_INDEX_URL}"; fi \
+ && pip install --no-cache-dir -r requirements.txt \
+ && pip install --no-cache-dir "opencv-contrib-python-headless>=4.8,<5"   # 5.x 未验证，先跟 ci/本机 4.10 对齐
 
 COPY pc ./pc
 COPY shared ./shared

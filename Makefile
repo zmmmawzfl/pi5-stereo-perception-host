@@ -1,11 +1,13 @@
 PY ?= python3
 CALIB ?= runs/demo/calib/stereo_calib.npz
+BASE_IMAGE ?= python:3.12-slim
+PIP_INDEX_URL ?=
 
 .PHONY: help test deps demo calib budget checker clean docker-cpu docker-ros2
 
 help:
 	@echo "make deps   按平台选 requirements 并安装（Linux CPU / NVIDIA / macOS）"
-	@echo "make test   运行 80 个 PC/macOS 测试"
+	@echo "make test   运行全部 PC 测试（当前 84 个）"
 	@echo "make demo   合成场景端到端 demo + 压缩量化"
 	@echo "make calib  生成合成标定文件"
 	@echo "make budget 640x640@30fps 链路预算"
@@ -40,7 +42,8 @@ checker:
 	$(PY) -m tools.make_checkerboard --pattern 9x6 --square-mm 30 --page a3 --out ../artifacts/calibration/board_9x6_30mm_a3
 
 docker-cpu:
-	docker build -f docker/Dockerfile.cpu -t stereo-depth-cpu:latest .
+	docker build -f docker/Dockerfile.cpu -t stereo-depth-cpu:latest \
+	  --build-arg BASE_IMAGE=$(BASE_IMAGE) --build-arg PIP_INDEX_URL=$(PIP_INDEX_URL) .
 	@echo "运行示例：docker run --rm --network host -v \"\$$PWD/data:/data:ro\" -v \"\$$PWD/runs:/out\" stereo-depth-cpu:latest"
 
 docker-ros2:

@@ -131,5 +131,6 @@ docker run --rm --network=host stereo-depth-ros2:humble bash -lc \
   `rpicam-hello --list-cameras` 返回 `No cameras available!`。
   → 需要重新插紧两路 CSI 排线，再跑 `rpicam-hello --list-cameras` 确认。
 - 相机恢复后：真实 Pi→x86 E2E（`--encoding jpeg`，再用 `raw_bgr8` 对比 442.4 Mbps 预算）。
-- 标定板未准备（9×6、30 mm）；`data/calib/` 仍为空，只能用 `runs/demo` 的合成标定。
+- ~~标定板未准备~~ → **2026-11-21 已完工**：A3 / 9×6 内角点 / 30 mm 方格，贴在 3 mm 雪弗板上（做法与采图前检查见 `artifacts/calibration/README.md`）。
+  `data/calib/` 仍为空（还没采图），所以端到端验证仍只能用 `runs/demo` 的合成标定。
 - ROS 2 节点联调需要真实点云/相机标定，暂缓。

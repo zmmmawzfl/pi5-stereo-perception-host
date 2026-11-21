@@ -70,6 +70,9 @@ python -m pc.receive.record_pairs --endpoint tcp://<PI_IP>:5555 \
 
 ### 2a. 采棋盘格（Pi，录成标准录制目录）
 
+标定板：**A3、9×6 内角点、30 mm 方格**，实物已做好（2026-11-21），文件在 `../artifacts/calibration/`，
+做法、翘曲风险与采图前检查清单见 `../artifacts/calibration/README.md`。
+
 把棋盘格放在 0.4–0.8 m，缓慢平移/倾斜，覆盖画面四角和不同姿态，录 100–200 对：
 
 ```bash

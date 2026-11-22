@@ -1,15 +1,17 @@
 PY ?= python3
 CALIB ?= runs/demo/calib/stereo_calib.npz
+CALIB_ROOT ?= data/recordings/calib_board
 BASE_IMAGE ?= python:3.12-slim
 PIP_INDEX_URL ?=
 
-.PHONY: help test deps demo calib budget checker clean docker-cpu docker-ros2
+.PHONY: help test deps demo calib check-calib budget checker clean docker-cpu docker-ros2
 
 help:
 	@echo "make deps   按平台选 requirements 并安装（Linux CPU / NVIDIA / macOS）"
-	@echo "make test   运行全部 PC 测试（当前 84 个）"
+	@echo "make test   运行全部 PC 测试（当前 101 个）"
 	@echo "make demo   合成场景端到端 demo + 压缩量化"
 	@echo "make calib  生成合成标定文件"
+	@echo "make check-calib 体检标定采集（CALIB_ROOT=... 指目录）"
 	@echo "make budget 640x640@30fps 链路预算"
 	@echo "make checker 生成 A3 棋盘格 PDF 到 artifacts/calibration"
 	@echo "make docker-cpu  构建纯 CPU 容器（任意 Docker 主机，跨架构一次构建）"
@@ -34,6 +36,10 @@ demo:
 
 calib:
 	$(PY) -m pc.calib.cli synthetic --out $(CALIB) --views 15
+
+check-calib:
+	$(PY) -m tools.check_calib --root $(CALIB_ROOT) \
+	  --out runs/calib_check.json --montage runs/calib_coverage.png
 
 budget:
 	$(PY) -m tools.transport_budget --width 640 --height 640 --fps 30

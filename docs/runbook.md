@@ -68,16 +68,21 @@ python -m pc.receive.record_pairs --endpoint tcp://<PI_IP>:5555 \
 
 ## 2. 标定
 
-### 2a. 采棋盘格（Pi，录成标准录制目录）
+### 2a. 采棋盘格（Pi 端当拍当验）
 
 标定板：**A3、9×6 内角点、30 mm 方格**，实物已做好（2026-11-21），文件在 `../artifacts/calibration/`，
 做法、翘曲风险与采图前检查清单见 `../artifacts/calibration/README.md`。
 
-把棋盘格放在 0.4–0.8 m，缓慢平移/倾斜，覆盖画面四角和不同姿态，录 100–200 对：
+用 Pi 端的采集工具，它只在两只眼都检出完整棋盘时落盘，并提示 3x3 网格里还缺哪个方位
+（裸录 150 对、标定时才发现只有 9 对能用，是最常见的返工）：
 
 ```bash
-python -m pi.tools.record_pairs --out data/recordings/calib_board --frames 150
+python -m pi.tools.capture_calib --out data/recordings/calib_board \\
+    --target 15 --attempts 120 --width 1640 --height 1232
 ```
+
+采完先体检（`make check-calib CALIB_ROOT=...`），判据与失败对照表见
+[`calibration_capture.md`](calibration_capture.md)。
 
 ### 2b. 在 PC 上直接标定（无需手工分左右目录）
 

@@ -4,13 +4,14 @@ CALIB_ROOT ?= data/recordings/calib_board
 BASE_IMAGE ?= python:3.12-slim
 PIP_INDEX_URL ?=
 
-.PHONY: help test deps demo calib check-calib check-docs budget checker clean docker-cpu docker-ros2
+.PHONY: help test deps demo calib check-calib synth-calib check-docs budget checker clean docker-cpu docker-ros2
 
 help:
 	@echo "make deps   按平台选 requirements 并安装（Linux CPU / NVIDIA / macOS）"
-	@echo "make test   运行全部 PC 测试（当前 111 个）"
+	@echo "make test   运行全部 PC 测试（当前 114 个，Pi 上 1 项跳过）"
 	@echo "make demo   合成场景端到端 demo + 压缩量化"
 	@echo "make calib  生成合成标定文件"
+	@echo "make synth-calib 生成合成标定板图（带真值）再标定回去，验证标定链路（x86 上跑；Pi 的 SB 检测器会卡住）"
 	@echo "make check-calib 体检标定采集（CALIB_ROOT=... 指目录）"
 	@echo "make check-docs 体检文档：md 里引用的文件/python -m 模块/make 目标是否存在"
 	@echo "make budget 640x640@30fps 链路预算"
@@ -41,6 +42,12 @@ calib:
 check-calib:
 	$(PY) -m tools.check_calib --root $(CALIB_ROOT) \
 	  --out runs/calib_check.json --montage runs/calib_coverage.png
+
+synth-calib:
+	$(PY) -m tools.synth_calib_views --out runs/synth_calib/views --views 18
+	$(PY) -m pc.calib.cli calibrate --left runs/synth_calib/views/left \
+	  --right runs/synth_calib/views/right --pattern 9x6 --square-mm 30 \
+	  --min-views 12 --out runs/synth_calib/calib.npz
 
 budget:
 	$(PY) -m tools.transport_budget --width 640 --height 640 --fps 30

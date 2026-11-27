@@ -164,14 +164,50 @@ python3 -m pc.calib.cli calibrate \
 标定会打印有效视图数、跳过的帧号，以及：
 
 ```
-baseline=80.03 mm  f=531.1 px  stereo RMS=0.31 px
+baseline=80.03 mm  f=1400.9 px  stereo RMS=0.31 px
 ```
+
+（`f` 随分辨率变：1640×1232 下 IMX219 约 **1360–1410 px**；640×480 的合成 demo 才是 531 px。）
 
 验收看三样：
 
 - **baseline** 应 ≈ 80 mm（支架标称）。差 > 0.5 mm 说明装配歪了或某几张姿态有问题
 - **RMS** 越小越好，< 0.5 px 算好；> 1 px 说明数据里有糊片/误检，回到第 4 步看提示
 - **跳过的帧号** 应该和体检判废的帧基本一致；如果体检通过但标定跳过，说明 classic 与 SB 的分歧落在了边界片上 —— 删掉那几张重标
+
+## 5.1 硬件无关自检：合成板图 → 标定 → 对真值
+
+在花时间举着板子拍 20 张之前，先确认「读图 → 检测角点 → 标定 → 存 npz」这条路是通的。
+`tools/synth_calib_views.py` 按你的分辨率渲染 18 对棋盘（焦距按分辨率给，真值写进
+`truth.json`），再用同一条标定命令标回去：
+
+```bash
+python3 -m tools.synth_calib_views --out runs/synth_calib/views --views 18
+python3 -m pc.calib.cli calibrate --left runs/synth_calib/views/left \
+    --right runs/synth_calib/views/right --pattern 9x6 --square-mm 30 \
+    --min-views 12 --out runs/synth_calib/calib.npz
+# 或者：make synth-calib
+```
+
+2026-11-28 在 Mac（cv2 5.1）上实测 1640×1232 / f=1400 px / 基线 80 mm：
+
+| 量 | 真值 | 标定回来 | 偏差 |
+| --- | --- | --- | --- |
+| f | 1400.0 px | 1400.9 px | +0.07% |
+| baseline | 80.0 mm | 80.0 mm | 0.00% |
+| stereo RMS | — | 0.0535 px | — |
+
+偏差在这个量级就说明链路本身没问题：真机标定如果差 5% 以上，问题在**图、板、装法**，
+不在代码。
+
+两点注意：
+
+- 这一步会跑 `findChessboardCornersSB`，**只在 x86 / Mac 上跑**（Pi 上会卡住，见 §5）；
+  测试 `tests/test_synth_calib_views.py` 因此在 aarch64 上默认 skip（`RUN_CALIB_IT=1` 可强制）。
+- 2026-11-28 第一版生成器写错过两处（棋盘纹理画成 11×9 格却按 10×7 的高宽贴、右目平移
+  方向取反），结果标定回来 f 偏 +5%、baseline 偏 +11%、RMS 0.87 px —— **看起来和真实的
+  标定问题一模一样**。教训：合成器要给真值、并且自己先被验证过，才能拿来当"链路没问题"
+  的证据。
 
 ## 6. 失败对照表
 
@@ -188,7 +224,10 @@ baseline=80.03 mm  f=531.1 px  stereo RMS=0.31 px
 ## 7. 最短路径
 
 ```bash
-# Pi：只存合格帧
+# x86 / Mac：先自检链路（合成板图 -> 标定 -> 对真值，10 秒）
+cd macos-pc && make synth-calib
+
+# Pi：只存合格帧（板要真的动起来）
 cd ~/桌面/深度/raspberry-pi
 .venv/bin/python -m pi.tools.capture_calib --out data/recordings/calib_board --target 15
 

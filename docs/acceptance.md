@@ -13,7 +13,7 @@
 | 5 | 物体级 3D JSON + 体素点云 PLY | `pc/objects/`、`pc/depth/`、`runs/demo/objects.json`、`cloud.ply` | 完成 |
 | 5b | ROS 2 点云/深度/对象发布 | `pc/ros2/pointcloud_node.py` | 代码完成；ROS 2 运行期未验证 |
 | 5c | Foxglove / RTAB-Map / Nav2 接入 | `docs/ros2_foxglove.md`、`ros2/config/` | 参数与说明完成；未在 ROS 2 环境跑过 |
-| 5d | macOS 原生 + Docker 混合形态 | `pc/runtime.py`、`configs/pc_macos.yaml`、`docker/`、`docker-compose.yml`、`docs/macos_docker.md` | macOS 原生基础链路已验证；Docker 未安装/未构建 |
+| 5d | macOS 原生 + Docker 混合形态 | `pc/runtime.py`、`configs/pc_macos.yaml`、`docker/`、`docker-compose.yml`、`docs/macos_docker.md` | macOS 原生基础链路已验证；Docker 镜像已在 x86 主机构建验证，ROS 节点未跑 |
 | 6 | 已知距离验证报告 | `tools/run_demo.py` 报告；实机用 `pc.receive.live` + 真值 | 合成完成；实机待测 |
 | 7 | 运动边界报告 | `tools/motion_jitter.py` | 工具完成；实机待测 |
 | 8 | 可选扩展：TSDF 网格 | `pc/tsdf/fuse_offline.py` | 完成（需 Open3D + 位姿；不作为主线依赖） |
@@ -38,7 +38,7 @@
 | ROS 2 发布 | PointCloud2/深度/对象 | 节点/字段已实现 | 未运行（无 ROS 2） |
 | macOS 原生基础链路 | 测试/demo/回放可跑 | Apple M2：80 PC tests（2 skip）、demo 20.27 fps、回放 9.56 fps | 已验证（模型推理除外） |
 | macOS CoreML provider | `pc.runtime` 能选到 CoreML | `CoreMLExecutionProvider` 已可见 | provider 通过；YOLO/FFS 推理未跑 |
-| Docker ROS 2（Humble） | 话题/字段/Foxglove 可通 | `docker/Dockerfile.ros2` + compose | Docker 未安装/未构建 |
+| Docker ROS 2（Humble） | 话题/字段/Foxglove 可通 | `docker/Dockerfile.ros2` + compose | 镜像已构建并验证（2026-11-14，x86：189 个包，容器内纯 CPU E2E 3.66 fps）；**ROS 节点本体仍未跑**，无 GPU |
 | Foxglove 可视化 | 可看 | 字段与配置说明就绪 | 未运行 |
 | CPU/内存 | 有进程级观测 | `pc.validate.resources` + live `resources` | 工具就绪，实机待测 |
 | 学习型三项 | 有明确结论 | **未执行** | 待目标 PC |

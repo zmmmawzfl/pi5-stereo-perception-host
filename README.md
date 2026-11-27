@@ -75,17 +75,17 @@ flowchart LR
 
 | 层 | 状态 | 说明 |
 |---|---|---|
-| 合成/回放完整管线 | ✅ | 80 个 unittest 通过；`tools.run_demo` 可复现 |
+| 合成/回放完整管线 | ✅ | 111 个 unittest 通过；`tools.run_demo` 可复现 |
 | macOS 原生基础链路 | ✅ | Apple M2 / 8 GB；短序列合成 demo 20.27 fps |
 | Linux/NVIDIA 目标机 | ❌ 未测 | 不能在 Pi 5 上代替目标 PC 帧率 |
 | 真实双目标定 | ❌ 待做 | Pi 相机尚未刚性固定 |
 | YOLO 检测 | ⚠️ 权重未随仓库分发 | 缺权重时自动退回彩色连通域占位 |
 | 学习型匹配器 | ⚠️ 仅适配器/ONNX 预下载 | 未在 GPU 上实测；FFS 预处理语义待对齐 |
-| ROS 2 节点 | ⚠️ 代码完成 | 本机未装 ROS 2，未跑运行期 |
+| ROS 2 节点 | ⚠️ 代码完成 | 本机未装 ROS 2；容器里有 Humble，但 `pointcloud_node` **还没跑过**（话题/TF/QoS 未验证） |
 | Foxglove / RTAB-Map / Nav2 | ⚠️ 参数/文档完成 | 未在 ROS 2 环境验证 |
-| Docker ROS 2 | ❌ 未构建 | 只做纯 CPU 接口联调，无 GPU |
+| Docker ROS 2 | ✅ 镜像已构建（x86 主机） | `docker/Dockerfile.ros2` 出 `stereo-depth-ros2:humble`（2.13 GB，容器内 189 个包），容器里跑通纯 CPU E2E 3.66 fps；**ROS 2 节点本体未跑**，容器无 GPU |
 
-> 80 个测试里有平台/provider、ROS 打包、SGBM ROI、点云体素等单测；**测试通过不等于实机精度通过**。
+> 111 个测试里有平台/provider、ROS 打包、SGBM ROI、点云体素等单测；**测试通过不等于实机精度通过**。
 
 ## 5. 已验证数字
 
@@ -102,6 +102,7 @@ flowchart LR
 | H.264 2.5 Mbps 最大深度偏移 | **0.41%** | 压缩往返量化 |
 | 处理耗时（Pi 5） | SGBM **150 ms** / 总 **266 ms** / **3.75 fps** | 仅正确性参考 |
 | Mac 短序列 demo | **20.27 fps** | M2，3 帧，非目标 PC |
+| 处理耗时（x86 Pentium G4560） | SGBM **173.7 ms** / 总 **359.8 ms** / **2.78 fps** | 8 帧合成 demo，纯 CPU，无 GPU |
 | 实机同步（Pi） | **52.8 ms → 0.56 ms** | 200 帧 P 环；相机未固定 |
 
 | 深度图 | 视差 / 源图 |
@@ -115,8 +116,9 @@ flowchart LR
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 make deps      # 自动选 requirements-linux-cpu.txt（无 GPU）/ requirements-pc.txt（NVIDIA）
-make test      # 80 项
+make test      # 111 项
 make demo
+make check-docs  # 体检文档：md 里引用的文件/模块/make 目标是否真实存在
 ```
 
 > 视觉链路是纯 Python，依赖都是预编译 wheel（OpenCV 自带 ximgproc），**不需要编译**；只有 ROS 2 才要额外安装或容器。
@@ -273,7 +275,7 @@ macos-pc/
 ├── configs/            # default / pc / pc_macos
 ├── ros2/               # RTAB-Map / Nav2 参数与 launch
 ├── docs/               # 接口、验收、阶段三、macOS/Docker、交接
-└── tests/              # 80 个 PC 侧 unittest
+└── tests/              # 111 个 PC 侧 unittest
 ```
 
 ## 9. 关键设计
@@ -292,7 +294,7 @@ macos-pc/
 - 学习型匹配器未在 GPU 上实测，不能拿预下载 ONNX 当性能证据；
 - YOLO 权重不随仓库分发，默认彩色连通域只验证链路，不代表检测精度；
 - ROS 2/Foxglove/RTAB-Map/Nav2 只有代码与参数，未在 ROS 2 环境跑过；
-- Docker 未构建；容器是纯 CPU 接口联调，不能代表 Mac 原生或 RTX 性能；
+- Docker 镜像已在 x86 主机构建并验证（纯 CPU，容器内 189 个 ROS 包）；容器无 GPU，不能代表 Mac 原生或 RTX 性能；
 - Mac CoreML 数字不能等同 RTX 3060 TensorRT。
 
 ## 11. 文档
@@ -306,6 +308,7 @@ macos-pc/
 | ROS 2 / Foxglove / RTAB-Map / Nav2 | [docs/ros2_foxglove.md](docs/ros2_foxglove.md) |
 | 阶段三学习型对照 | [docs/stage3.md](docs/stage3.md) |
 | 验收映射 | [docs/acceptance.md](docs/acceptance.md) |
+| 文档体检 | \`make check-docs\`（\`tools/check_docs.py\`）：校验 md 里引用的本地路径、\`python -m\` 模块与 make 目标是否存在 |
 | Pi↔PC 联调 | [docs/runbook.md](docs/runbook.md) |
 | 640×640 链路/raw 预算 | [docs/transport.md](docs/transport.md) |
 | Pi 边缘端 | [pi5-stereo-perception-edge](https://github.com/zmmmawzfl/pi5-stereo-perception-edge) |

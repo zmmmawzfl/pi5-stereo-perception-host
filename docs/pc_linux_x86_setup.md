@@ -49,13 +49,13 @@ scp <pi>:/tmp/pc.tar.gz /tmp/ && tar -xzf /tmp/pc.tar.gz && mv macos-pc pi5-ster
 ```bash
 cd ~/pi5-stereo-perception-host
 OPENCV_OPENCL_RUNTIME=disabled python3 -m unittest discover -s tests -t .
-# Ran 80 tests in 11.135s — OK
+# Ran 80 tests in 11.135s — OK（2026-11-27 复跑为 111 项）
 ```
 
 合成 demo（8 帧，`runs/demo` 合成标定 B=83.025 mm、f=531.125 px、RMS=0.0471）：
 
 ```bash
-python3 -m pc.demo --frames 8 --out runs/demo_x86
+python3 -m tools.run_demo --out runs/demo_x86 --frames 8 --compression
 ```
 
 | 指标 | 值 |

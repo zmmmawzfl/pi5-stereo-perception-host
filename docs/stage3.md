@@ -87,7 +87,7 @@ python -m pc.runtime          # 期望 available 里有 CoreMLExecutionProvider
 
 `TensorRTDisparityMatcher` 只保留了显式报错入口。原因：没有目标 GPU 与引擎文件时写一套"看起来能跑"的 TensorRT 代码，最容易产出无法复现的假延迟。
 TensorRT 只在 **Linux + NVIDIA** 上跑；macOS Docker 容器内不要装 CUDA/TensorRT。
-在 PC 上导出（示例）：
+在 PC 上导出（示例）。注意：仓库里**只有** `models/yolov8n.pt` 与 `models/c_fast_foundationstereo_bp2_dynbatch_dynhw.onnx`，**没有** `models/ffs.onnx`——它要先从 FFS 官方权重自行导出，路径对了 trtexec 才能跑：
 
 ```bash
 yolo export model=models/yolov8n.pt format=engine half=True  # 检测（权重已预下载）

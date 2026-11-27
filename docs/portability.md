@@ -28,7 +28,7 @@ python -m unittest discover -s tests -t .
 python -m tools.run_demo --out runs/demo --frames 8 --compression
 ```
 
-- 已实测（2026-11-14）：Ubuntu 26.04 x86_64 + apt 的 OpenCV 4.10 → **80 项测试 OK，11.1 s**；Pi 5 aarch64 同源代码同样 80 项 OK。
+- 已实测（2026-11-14）：Ubuntu 26.04 x86_64 + apt 的 OpenCV 4.10 → **80 项测试 OK，11.1 s**（当时）；Pi 5 aarch64 同源代码同样 80 项 OK。**2026-11-27 复跑：x86 与 Pi 均为 111 项 OK**（PC 17.1 s）。
 - 版本边界：只需要 OpenCV ≥ 4.8 且**带 contrib**（`cv2.ximgproc`，SGBM 右目匹配 + WLS）。检查：
   ```bash
   python -c "import cv2; print(cv2.__version__, hasattr(cv2,'ximgproc'))"
@@ -139,7 +139,7 @@ docker buildx build \
 
 ```bash
 python -c "import cv2; print(cv2.__version__, hasattr(cv2,'ximgproc'))"   # OpenCV 带 contrib
-python -m unittest discover -s tests -t .                                  # 80 项
+python -m unittest discover -s tests -t .                                  # 111 项
 python -m tools.run_demo --out runs/demo --frames 8 --compression           # 端到端
 docker compose run --rm --no-deps ros2 ros2 pkg list | wc -l                # 容器（可选）≈189
 ```

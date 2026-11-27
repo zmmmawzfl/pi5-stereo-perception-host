@@ -5,6 +5,8 @@
 > **2026-11-01 验证进展**：macOS 原生（Apple M2、8 GB、macOS 27.2、Python 3.14.6、
 > OpenCV 5.0.0-contrib）已跑通 **80 个 PC 测试（2 skip）**、合成 demo（20.27 fps）和 3 对回放
 > （9.56 fps）。**Docker 未安装/未构建；YOLO 与 FFS 的模型推理未跑。**
+>
+> **2026-11-27 更新**：上面是当时状态。现在 **111 个 PC 测试 OK**（Mac 上仍可能 2 skip）；Docker 镜像已在 x86 主机构建并验证（`stereo-depth-ros2:humble`，容器内 189 个 ROS 包，纯 CPU E2E 3.66 fps）；YOLO/FFS 仍未在 GPU 上实测。
 > 下面每一步都给了“看到什么才算成功”，不要跳步，也不要把未跑的数字当结论。
 >
 > 相关深文档：[macOS/Docker 细节](macos_docker.md)、[项目状态](PROJECT_STATE.md)、
@@ -73,7 +75,7 @@ Pi 5 双 IMX219 ──ZMQ──► PC
 | 真实相机、真实标定、真实同步 | ⚠️ 双 IMX219 已能采集；未固定、未标定 |
 | macOS 原生基础链路 | ✅ Apple M2 已验证：demo 20.27 fps、3 对回放 9.56 fps |
 | macOS CoreML | ⚠️ `CoreMLExecutionProvider` 已可见；YOLO/FFS 推理未跑 |
-| Docker ROS 2 | ❌ Docker 未安装，未构建 |
+| Docker ROS 2 | ✅ 已在 x86 主机构建（2026-11-14，`stereo-depth-ros2:humble`，189 个包）；ROS 节点未跑 |
 | 模型权重 | ⚠️ `models/` 已预下载并校验，未接入/未实测 |
 | 目标 PC 帧率 | ❌ 没有；Pi 的 3.75 fps 不是 Mac/RTX 数字 |
 
@@ -283,7 +285,7 @@ auto selection: ['CoreMLExecutionProvider', 'CPUExecutionProvider']
 ### 3.3 跑测试和合成 demo
 
 ```bash
-# 80 个测试；macOS 上个别依赖 ffmpeg 的用例可能 skip
+# 111 个测试（2026-11-27）；macOS 上个别依赖 ffmpeg 的用例可能 skip
 python -m unittest discover -s tests -t .
 
 # 端到端合成 demo（不启用学习型，不依赖模型）

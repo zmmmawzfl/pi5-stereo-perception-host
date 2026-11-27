@@ -7,7 +7,7 @@
 > 仓库根目录（本仓库）：Linux 本地 `/home/chenai/桌面/深度/macos-pc`；Mac `~/Desktop/stereo-depth`。
 > 本仓库只含 **PC/macOS 端**；Pi 采集端是另一个独立仓库（本地 `../raspberry-pi`）。
 > 当时提交：`e35346e`；根 `.git` 后来已删除，两个子目录已各自建仓。
-> 当时工作区：macOS/Docker 后端、模型资产、相机检查与同步启动修正；**80 个 PC 测试**、**20 个 Pi 测试**通过；双 IMX219 已能采集，但**未刚性固定**，计划 2026-11-05 做支架。
+> 当时工作区：macOS/Docker 后端、模型资产、相机检查与同步启动修正；**80 个 PC 测试**、**20 个 Pi 测试**通过（2026-11-0x 当时数字；现为 111 / 40，见 README）；双 IMX219 已能采集，但**未刚性固定**，计划 2026-11-05 做支架。
 
 ---
 
@@ -324,7 +324,7 @@ macos-pc/
 ├── docker/                     # ROS 2 Humble CPU 容器
 ├── docker-compose.yml          # macOS Docker Desktop 服务定义
 ├── requirements-macos.txt      # macOS 原生依赖（CoreML EP）
-├── tests/                      # 80 个 PC unittest
+├── tests/                      # 111 个 PC unittest
 ├── docs/                       # 接口、第一天、阶段三、验收、runbook、macOS/Docker、本文件
 ├── data/recordings/            # 测试录制（gitignore）
 └── runs/                       # 报告与产物（gitignore）
@@ -715,7 +715,7 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 | Pi CPU/散热 | 未测 | 编码+推流可能满载/降频 | 全开时看 `vcgencmd`/`top`，锁定 governor |
 | 目标 PC 帧率 | 未测 | 3.75 fps 是 Pi 数字；macOS CoreML 也不等于 RTX | RTX 3060 上跑同一 demo；Mac 数字单独标注 |
 | macOS CoreML 运行期 | provider 已可见；模型推理未跑 | CoreML EP 可能不支持动态 shape | 先 `python -m pc.runtime`，FFS 先 cpu 后 coreml |
-| Docker ROS 2 运行期 | Docker 未安装/未构建 | 话题/TF/QoS/端口可能有坑 | Docker Humble 跑 node + Foxglove:8765；容器无 GPU |
+| Docker ROS 2 运行期 | 镜像已构建（x86，2026-11-14）；ROS 节点未跑 | 话题/TF/QoS/端口可能有坑 | Docker Humble 跑 node + Foxglove:8765；容器无 GPU |
 | YOLO 精度 | 权重已下载，本机无 ultralytics/引擎 | 物体框与类别仍不可用 | 在目标 PC 用真实数据评估；不要把 `.pt` 当 TensorRT 延迟 |
 | 学习型匹配器 | ONNX 已下载，未实测 | 无法判断是否值得保留 | 先核对输入/归一化/输出，再按 `docs/stage3.md` 三项验收 |
 | TSDF | 缺 Open3D/位姿 | 不能作为主线 | 先确定转台/机械臂位姿来源，再离线试 |
@@ -809,7 +809,7 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 > 先读 `docs/PROJECT_STATE.md`（本文件）和 `README.md`。
 > 当前主线是机器人双目感知，不是 3D 建模；默认纯 SGBM，96 视差，0.03 m 体素，ROS 2 发布代码已写但本机没装 ROS 2。
 > 相机已连接且采集已验证，但**未固定**；**2026-11-05 先做刚性支架并给 cam1 调焦**，固定前不要标定。
-> 先在 Pi 仓库看 `docs/camera_check.md`，再跑 80 个 PC 测试和 `tools.run_demo`，
+> 先在 Pi 仓库看 `docs/camera_check.md`，再跑 111 个 PC 测试和 `tools.run_demo`，
 > 最后按 `docs/acceptance.md` 的“尚未完成”清单继续。
 > 改代码前先看 `docs/interfaces.md` 的数据契约；改融合规则前先看 `docs/stage3.md` 的“SGBM 优先、不平均”。
 

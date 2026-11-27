@@ -55,6 +55,16 @@ cd ~/桌面/深度/raspberry-pi
     --width 1640 --height 1232
 ```
 
+`--max-skew-ms` 默认 **1000**（棋盘静止，左右帧差多少都不影响标定）。实测 1640×1232 下
+P 环收敛不了（时间戳差中位 23 ms），所以别把它卡回 25 —— 那是动态场景的门限。
+
+采之前先跑一次装配体检（判「视差沿 x / 装反 180°」），见
+[`../../raspberry-pi/docs/rig_check.md`](../../raspberry-pi/docs/rig_check.md)：
+
+```bash
+.venv/bin/python -m pi.tools.rig_check --out runs/rig_check
+```
+
 输出长这样（只有两目都检出 54 个角点才落盘）：
 
 ```

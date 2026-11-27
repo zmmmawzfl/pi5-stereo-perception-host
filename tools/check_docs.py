@@ -28,6 +28,9 @@ REPO_ROOTS = (HOST_ROOT, EDGE_ROOT)
 CANDIDATE_ROOTS = (WORKSPACE, HOST_ROOT, EDGE_ROOT)
 
 RUNTIME_PATTERNS = (
+    # artifacts/ 不属于任何 git 仓库（里面有标定板 PDF、镜像 tar 等），
+    # 新机器 clone 两个仓库后必然没有；文档引用它不算错。
+    r"^artifacts/",
     r"(^|/)pairs\.json$",
     r"(^|/)capture\.json$",
     r"^runs/",

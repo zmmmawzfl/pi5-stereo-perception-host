@@ -40,6 +40,11 @@ class RuntimeTest(unittest.TestCase):
         for tok in ("runs/demo/report.md", "data/recordings/x/pairs.json", "data/calib/stereo_calib.npz"):
             self.assertTrue(is_runtime(tok), tok)
 
+    def test_workspace_artifacts_are_optional(self):
+        # artifacts/ 不在 git 里：新机器 clone 后不存在，文档引用它不该报错
+        self.assertTrue(is_runtime("artifacts/calibration/README.md"))
+        self.assertTrue(is_runtime("artifacts/pc-env-2026-11-14/x.tar.gz"))
+
     def test_checked_in_docs_are_not_runtime(self):
         self.assertFalse(is_runtime("docs/HANDOFF.md"))
         self.assertFalse(is_runtime("hardware/README.md"))
@@ -51,7 +56,8 @@ class ResolveTest(unittest.TestCase):
         cls.index = build_index()
 
     def test_checked_in_file_resolves(self):
-        self.assertTrue(resolves("docs/HANDOFF.md", [WORKSPACE], self.index))
+        # 用一个两个仓库里都一定有的文件，别依赖工作区根目录下的非 git 文档
+        self.assertTrue(resolves("tools/check_docs.py", [HOST_ROOT], self.index))
 
     def test_edge_repo_file_resolves_from_workspace_root(self):
         self.assertTrue(resolves("hardware/camera_mount.scad", [EDGE_ROOT], self.index))

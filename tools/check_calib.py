@@ -38,11 +38,15 @@ import numpy as np
 # ---- 验收线（改这里就等于改标准）----
 MIN_VIEWS = 15          # 可用帧对下限；calibrate 的 --min-views 默认 10，但 15 更稳
 WARN_VIEWS = 20         # 低于这个数只提示"建议多拍"，不算不合格
-COVERAGE_MIN_CELLS = 8  # 9 格里至少要占 8 格（中心格必须占，见 decide）
+COVERAGE_MIN_CELLS = 8  # 9 格里至少要占 8 格（按"角点落在哪格"算，见 coverage）
 SIZE_RATIO_MIN = 1.5    # 最近的棋盘 / 最远的棋盘 >= 1.5 倍，否则距离没拉开
 DUP_MAX = 2             # 允许最多 2 张"几乎同一个姿态"的重复
 EDGE_MARGIN_PX = 4      # 棋盘顶点离画面边缘小于这个距离算"出画"
 SHARP_WARN_RATIO = 0.5  # 锐度低于中位数一半的给提示
+# 棋盘占画面宽度的比例。太小 = 焦距/距离/畸变互相能抵消，标出来的参数不可信。
+# 目标是 45%~55%；A3 板（300 mm 宽）在 1640 宽、f~1400 时要离 0.65~0.75 m。
+FILL_MIN = 0.35         # 低于这个直接判不合格
+FILL_GOOD = 0.45        # 低于这个只提示"还能更近一点"
 
 CLASSIC_FLAGS = (
     cv2.CALIB_CB_ADAPTIVE_THRESH
@@ -82,6 +86,12 @@ def detect(
 # --------------------------------------------------------------------------- #
 # 几何指标
 # --------------------------------------------------------------------------- #
+def board_width_px(quad: np.ndarray) -> float:
+    """棋盘长边在画面里的长度（px）：q0-q1 是长边方向，q2-q3 是它的对边。"""
+    q = np.asarray(quad, np.float64)
+    return float(0.5 * (np.linalg.norm(q[1] - q[0]) + np.linalg.norm(q[2] - q[3])))
+
+
 def quad_from_corners(corners: np.ndarray, pattern: Tuple[int, int]) -> np.ndarray:
     """取出棋盘最外圈四个角（顺序与 corners 的行优先顺序一致）。"""
     cols, rows = pattern
@@ -160,12 +170,23 @@ def cell_of(cx: float, cy: float, width: int, height: int) -> Tuple[int, int]:
 
 
 def coverage(verdicts: Sequence[Dict], width: int, height: int) -> Dict:
+    """3x3 覆盖：按**检测到的角点**落在哪格算（没有角点数据时退回棋盘中心）。
+
+    为什么不按棋盘中心：角格在物理上到不了 —— A3 板要占画面一半宽度，
+    板中心最多只能偏轴半幅的 49%，于是中心法永远缺四角，而缺的恰好是
+    畸变最需要约束的画幅边缘。按角点算，"板上一个角伸进画面左下"就算数。
+    """
     grid = [[0] * 3 for _ in range(3)]
     for v in verdicts:
         if not v["ok"]:
             continue
-        col, row = cell_of(v["center"][0], v["center"][1], width, height)
-        grid[row][col] += 1
+        pts = v.get("corners_left")
+        if pts:
+            hit = {cell_of(float(x), float(y), width, height) for x, y in pts}
+        else:
+            hit = {cell_of(v["center"][0], v["center"][1], width, height)}
+        for col, row in hit:
+            grid[row][col] += 1
     cells = [[c, r] for r in range(3) for c in range(3) if grid[r][c] > 0]
     return {"grid": grid, "cells": cells, "n_cells": len(cells)}
 
@@ -248,6 +269,13 @@ def evaluate_pair(
             "quad_left": [[round(float(x), 2), round(float(y), 2)] for x, y in ql],
             "size_px": float(size_px),
             "center": [float(cx), float(cy)],
+            # 全部内角点（原图坐标），覆盖统计和拼图都靠它
+            "corners_left": [
+                [round(float(x), 2), round(float(y), 2)]
+                for x, y in np.asarray(cl, np.float64).reshape(-1, 2) * inv
+            ],
+            "board_w_px": float(0.5 * (board_width_px(ql) + board_width_px(qr))),
+            "fill_frac": float(board_width_px(ql) / max(left.shape[1], 1)),
             "persp_ratio": float(0.5 * (ml["persp_ratio"] + mr["persp_ratio"])),
             "edge_ratio": float(0.5 * (ml["edge_ratio"] + mr["edge_ratio"])),
             # 锐度一律在原图上算，跨帧才可比
@@ -282,9 +310,24 @@ def decide(
         warnings.append(f"可用帧对 {len(ok)}，建议补到 {WARN_VIEWS} 张以上")
 
     if grid["n_cells"] < COVERAGE_MIN_CELLS:
-        reasons.append(f"棋盘只覆盖了 {grid['n_cells']}/9 格（要求 >= {COVERAGE_MIN_CELLS}）")
+        reasons.append(
+            f"角点只覆盖了 {grid['n_cells']}/9 格（要求 >= {COVERAGE_MIN_CELLS}）："
+            f"画面边缘要有棋盘角伸进去"
+        )
     if grid["grid"][1][1] == 0:
-        reasons.append("中心格是空的：至少要有 2 张棋盘放在画面正中")
+        reasons.append("画面正中一格没有角点：至少要有 2 张棋盘放在正中")
+
+    fills = [float(v["fill_frac"]) for v in ok if "fill_frac" in v]
+    best_fill = max(fills) if fills else 0.0
+    if fills and best_fill < FILL_MIN:
+        reasons.append(
+            f"板太小：最大只占画面宽度的 {best_fill * 100:.0f}%（要求 >= {FILL_MIN * 100:.0f}%），"
+            f"把板拿近，让 300 mm 的长边横跨半个画面"
+        )
+    elif fills and best_fill < FILL_GOOD:
+        warnings.append(
+            f"板最大占画面宽度 {best_fill * 100:.0f}%，还能再近一点（目标 >= {FILL_GOOD * 100:.0f}%）"
+        )
 
     if len(ok) >= 2:
         span = size_span(verdicts)
@@ -325,6 +368,7 @@ def decide(
         "passed": not reasons,
         "n_total": len(verdicts),
         "n_ok": len(ok),
+        "max_fill": round(best_fill, 4),
         "reasons": reasons,
         "warnings": warnings,
     }
@@ -367,7 +411,7 @@ def write_montage(
     )
     color = (30, 120, 30) if summary["verdict"]["passed"] else (20, 20, 200)
     cv2.putText(canvas, line1, (12, 34), cv2.FONT_HERSHEY_SIMPLEX, 0.78, color, 2, cv2.LINE_AA)
-    line2 = "grid: 3x3 where the board centre landed   (red border = this frame is unusable)"
+    line2 = "grid: 3x3 where the detected corners landed   (red border = this frame is unusable)"
     cv2.putText(canvas, line2, (12, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (90, 90, 90), 1, cv2.LINE_AA)
 
     # 右上角 3x3 覆盖示意
@@ -393,7 +437,10 @@ def write_montage(
                           (40, 180, 40) if v["ok"] else (30, 30, 220), 2)
         label = "#%02d  %s" % (i, "ok" if v["ok"] else "FAIL")
         if v["ok"]:
-            label += "  %.0fpx" % v["size_px"]
+            label += "  %.0fpx  %.0f%%" % (v["size_px"], v.get("fill_frac", 0.0) * 100.0)
+            for x, y in v.get("corners_left", []):
+                cv2.circle(tile, (int(x * tw / img.shape[1]), int(y * th / img.shape[0])), 1,
+                           (60, 200, 60), -1)
         # 标签压在图内左下角（底部一条浅底色保证可读），不额外占行高
         cv2.rectangle(tile, (0, th - 22), (tw - 1, th - 1), (236, 236, 236), -1)
         cv2.putText(tile, label, (8, th - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.46,
@@ -458,6 +505,7 @@ def print_report(verdicts, grid, dups, summary, width, height) -> None:
         if v["ok"]:
             print(
                 f"{head} L{v['n_left']} R{v['n_right']}  {v['size_px']:5.0f}px  "
+                f"占宽{v.get('fill_frac', 0.0) * 100:3.0f}%  "
                 f"倾斜{v['persp_ratio']:.2f}  锐度{v['sharp_left']:5.0f}/{v['sharp_right']:5.0f}  "
                 f"中心({v['center'][0] / width:.2f},{v['center'][1] / height:.2f})"
                 + ("  [贴边]" if v["touch_edge"] else "")
@@ -467,7 +515,7 @@ def print_report(verdicts, grid, dups, summary, width, height) -> None:
             print(f"{head} {' / '.join(v['reasons'])}")
     print("")
     marks = "●"
-    print("覆盖 3x3（棋盘中心落在哪格，行 0 = 上）")
+    print("覆盖 3x3（检测到的角点落在哪格，行 0 = 上）")
     for r in range(3):
         row = "".join(
             (marks if grid["grid"][r][c] else "·") + (f"{grid['grid'][r][c]}" if grid["grid"][r][c] else " ") + "  "
@@ -475,7 +523,9 @@ def print_report(verdicts, grid, dups, summary, width, height) -> None:
         )
         print("      " + row)
     span = size_span(verdicts)
-    print(f"   格子 {grid['n_cells']}/9   尺寸 {span['min']:.0f}..{span['max']:.0f} px（跨度 {span['ratio']:.2f}x）")
+    fills = [v["fill_frac"] for v in verdicts if v["ok"] and "fill_frac" in v]
+    fill_txt = f"   占宽 最大 {max(fills) * 100:.0f}%（目标 >= {FILL_GOOD * 100:.0f}%）" if fills else ""
+    print(f"   格子 {grid['n_cells']}/9   尺寸 {span['min']:.0f}..{span['max']:.0f} px（跨度 {span['ratio']:.2f}x）{fill_txt}")
     if dups:
         print(f"   重复姿态 {len(dups)} 组: " + ", ".join(f"#{i}/#{j}" for i, j, _ in dups))
     if any(not v["ok"] for v in verdicts):

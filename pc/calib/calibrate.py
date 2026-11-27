@@ -223,6 +223,89 @@ def _reprojection_rms(
     return float(np.sqrt(np.mean(err**2)))
 
 
+# 极线残差的外点判据：|dy| 超过 max(1.0 px, 3x 中位数) 的视图算异常
+OUTLIER_MIN_PX = 1.0
+OUTLIER_K = 3.0
+
+
+def _fit_stereo(
+    objpoints: Sequence[np.ndarray],
+    img_l: Sequence[np.ndarray],
+    img_r: Sequence[np.ndarray],
+    image_size: Tuple[int, int],
+    calib_flags: int,
+) -> Dict[str, Any]:
+    """跑一遍单目 + 联合 + 校正，返回所有中间量（剔除外点后要重跑一次）。"""
+    rms_l, K1, D1, rv_l, tv_l = cv2.calibrateCamera(
+        objpoints, img_l, image_size, None, None, flags=calib_flags
+    )
+    rms_r, K2, D2, rv_r, tv_r = cv2.calibrateCamera(
+        objpoints, img_r, image_size, None, None, flags=calib_flags
+    )
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
+    rms_s, K1, D1, K2, D2, R, T, E, F = cv2.stereoCalibrate(
+        objpoints,
+        img_l,
+        img_r,
+        K1,
+        D1,
+        K2,
+        D2,
+        image_size,
+        flags=calib_flags | cv2.CALIB_USE_INTRINSIC_GUESS,
+        criteria=criteria,
+    )
+    (R1, R2, P1, P2, Q, roi1, roi2) = cv2.stereoRectify(
+        K1, D1, K2, D2, image_size, R, T, flags=cv2.CALIB_ZERO_DISPARITY, alpha=0
+    )
+    return {
+        "rms_l": rms_l, "rms_r": rms_r, "rms_s": rms_s,
+        "K1": K1, "D1": D1, "K2": K2, "D2": D2,
+        "R": R, "T": T, "E": E, "F": F,
+        "R1": R1, "R2": R2, "P1": P1, "P2": P2, "Q": Q,
+        "roi1": roi1, "roi2": roi2,
+        "rv_l": rv_l, "tv_l": tv_l,
+    }
+
+
+def _per_view_epipolar(
+    fit: Dict[str, Any],
+    pts_l: Sequence[np.ndarray],
+    pts_r: Sequence[np.ndarray],
+) -> List[float]:
+    """每个视图校正后的 |dy| 中位数（同名点垂直残差，理想 ~0）。"""
+    out: List[float] = []
+    for pl, pr in zip(pts_l, pts_r):
+        ul = cv2.undistortPoints(pl.reshape(-1, 1, 2), fit["K1"], fit["D1"],
+                                 R=fit["R1"], P=fit["P1"]).reshape(-1, 2)
+        ur = cv2.undistortPoints(pr.reshape(-1, 1, 2), fit["K2"], fit["D2"],
+                                 R=fit["R2"], P=fit["P2"]).reshape(-1, 2)
+        n = min(len(ul), len(ur))
+        if n == 0:
+            out.append(float("nan"))
+            continue
+        out.append(float(np.median(np.abs(ul[:n, 1] - ur[:n, 1]))))
+    return out
+
+
+def _drop_outliers(resid: Sequence[float]) -> Tuple[List[int], List[int]]:
+    """挑出极线残差离群的视图。返回 (保留的序号, 剔除的序号)。
+
+    一次剔掉超过四分之一的视图说明不是个别外点（可能是板晃了/装了 180°），
+    这时一个都不剔，把问题留给调用方打印出来看。
+    """
+    vals = [r for r in resid if np.isfinite(r)]
+    if not vals:
+        return list(range(len(resid))), []
+    median = float(np.median(vals))
+    thresh = max(OUTLIER_MIN_PX, OUTLIER_K * median)
+    dropped = [i for i, r in enumerate(resid) if np.isfinite(r) and r > thresh]
+    if len(dropped) > max(1, len(resid) // 4):
+        return list(range(len(resid))), []
+    keep = [i for i in range(len(resid)) if i not in set(dropped)]
+    return keep, dropped
+
+
 def calibrate_stereo(
     left_images: Sequence[np.ndarray],
     right_images: Sequence[np.ndarray],
@@ -282,45 +365,38 @@ def calibrate_stereo(
     if zero_tangent:
         calib_flags |= cv2.CALIB_ZERO_TANGENT_DIST
 
-    rms_l, K1, D1, rv_l, tv_l = cv2.calibrateCamera(
-        objpoints, img_l, image_size, None, None, flags=calib_flags
-    )
-    rms_r, K2, D2, rv_r, tv_r = cv2.calibrateCamera(
-        objpoints, img_r, image_size, None, None, flags=calib_flags
-    )
+    view_ids = [i for i in range(len(left_images)) if i not in set(skipped)]
+    fit = _fit_stereo(objpoints, img_l, img_r, image_size, calib_flags)
+    resid = _per_view_epipolar(fit, img_l, img_r)
+    keep, dropped = _drop_outliers(resid)
+    epi_before = summarize(resid)
+    dropped_orig: List[int] = []
+    if dropped and len(keep) >= min_views:
+        dropped_orig = [view_ids[i] for i in dropped]
+        print(f"[calib] 剔除 {len(dropped)} 个极线残差异常视图（原序号 {dropped_orig}），重算")
+        objpoints = [objpoints[i] for i in keep]
+        img_l = [img_l[i] for i in keep]
+        img_r = [img_r[i] for i in keep]
+        view_ids = [view_ids[i] for i in keep]
+        fit = _fit_stereo(objpoints, img_l, img_r, image_size, calib_flags)
+        resid = _per_view_epipolar(fit, img_l, img_r)
+    elif dropped:
+        print(f"[calib] 警告：{len(dropped)} 个视图极线残差偏大，但剔除后会少于 {min_views} 对，保留全部")
 
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-6)
-    rms_s, K1, D1, K2, D2, R, T, E, F = cv2.stereoCalibrate(
-        objpoints,
-        img_l,
-        img_r,
-        K1,
-        D1,
-        K2,
-        D2,
-        image_size,
-        flags=calib_flags | cv2.CALIB_USE_INTRINSIC_GUESS,
-        criteria=criteria,
-    )
-
-    (R1, R2, P1, P2, Q, roi1, roi2) = cv2.stereoRectify(
-        K1,
-        D1,
-        K2,
-        D2,
-        image_size,
-        R,
-        T,
-        flags=cv2.CALIB_ZERO_DISPARITY,
-        alpha=0,
+    rms_l, K1, D1, rv_l, tv_l = fit["rms_l"], fit["K1"], fit["D1"], fit["rv_l"], fit["tv_l"]
+    rms_r, K2, D2 = fit["rms_r"], fit["K2"], fit["D2"]
+    rms_s, R, T, E, F = fit["rms_s"], fit["R"], fit["T"], fit["E"], fit["F"]
+    R1, R2, P1, P2, Q, roi1, roi2 = (
+        fit["R1"], fit["R2"], fit["P1"], fit["P2"], fit["Q"], fit["roi1"], fit["roi2"],
     )
 
     per_view: List[Dict[str, Any]] = []
-    for i, (rv, tv) in enumerate(zip(rv_l, tv_l)):
+    for k, (rv, tv) in enumerate(zip(rv_l, tv_l)):
         per_view.append(
             {
-                "view": i,
-                "rms_left_px": _reprojection_rms(objpoints[i], img_l[i], K1, D1, rv, tv),
+                "view": view_ids[k],
+                "rms_left_px": _reprojection_rms(objpoints[k], img_l[k], K1, D1, rv, tv),
+                "epipolar_dy_px": float(resid[k]) if k < len(resid) else None,
             }
         )
 
@@ -331,6 +407,8 @@ def calibrate_stereo(
         "source": "real-or-synthetic",
         "views_used": len(objpoints),
         "skipped": skipped,
+        "views_dropped": dropped_orig,
+        "epipolar_dy_before": epi_before,
         "distortion_model": {"fix_k3": bool(fix_k3), "zero_tangent": bool(zero_tangent)},
         "epipolar_dy": epi,
         "roi": {"left": [int(v) for v in roi1], "right": [int(v) for v in roi2]},

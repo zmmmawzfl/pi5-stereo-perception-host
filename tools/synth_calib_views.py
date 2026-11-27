@@ -88,7 +88,7 @@ def render_view(
 
 def _pose_ok(K: np.ndarray, rvec: np.ndarray, tvec: np.ndarray, pts: np.ndarray,
              baseline_m: float, min_span_frac: float, margin: int) -> bool:
-    """左右两只眼都要看全整块板，且板在画面里不能太小。"""
+    """左右两只眼都要看全整块板，且板的长边至少占画面宽度的 min_span_frac。"""
     height, width = int(K[1, 2] * 2) + 1, int(K[0, 2] * 2) + 1
     R, _ = cv2.Rodrigues(np.asarray(rvec, np.float64))
     for dx in (0.0, -baseline_m):
@@ -102,7 +102,8 @@ def _pose_ok(K: np.ndarray, rvec: np.ndarray, tvec: np.ndarray, pts: np.ndarray,
             return False
         if uv[:, 1].min() < margin or uv[:, 1].max() > height - margin:
             return False
-        if max(np.ptp(uv[:, 0]), np.ptp(uv[:, 1])) < min_span_frac * min(width, height):
+        # 板长边占画面宽度的比例（与 tools.check_calib 的 fill_frac 同一口径）
+        if max(np.ptp(uv[:, 0]), np.ptp(uv[:, 1])) < min_span_frac * width:
             return False
     return True
 
@@ -116,19 +117,23 @@ def render_stereo_views(
     pattern: Tuple[int, int] = (9, 6),
     seed: int = 11,
     dist_range: Optional[Tuple[float, float]] = None,
-    min_span_frac: float = 0.26,
+    min_span_frac: float = 0.32,
 ) -> Dict[str, object]:
     """生成 n_views 对左右图（BGR ndarray）+ 真值。位姿随机但保证整块板都在画面里。
 
-    dist_range=None 时按分辨率/焦距自己算：让板在最近处约 0.55×短边、最远处约 0.29×，
-    这样 800x600 与 1640x1232 都能用同一套默认值。
+    dist_range=None 时按分辨率/焦距自己算：让板占画面宽度的 35%~68%
+    （与 tools.check_calib 的"板太小"判据同口径），这样 800x600 与 1640x1232
+    都能用同一套默认值。板太小的话焦距/距离/畸变能互相抵消，标定结果不可信。
     """
     cols, rows = pattern
     width, height = image_size
     if dist_range is None:
         board_w = (cols + 1) * square_m
-        z_center = board_w * focal_px / (0.55 * min(width, height))
-        dist_range = (0.80 * z_center, 1.90 * z_center)
+        # 近端占宽 68%、远端 35%：投射后跨度仍 >= 1.5x（体检要求），
+        # 倾斜会让板在画面里的长边再缩 ~10%，所以源头的范围要更宽。
+        z_near = board_w * focal_px / (0.68 * width)
+        z_far = board_w * focal_px / (0.35 * width)
+        dist_range = (z_near, z_far)
     K = np.array([[focal_px, 0.0, (width - 1) / 2.0],
                   [0.0, focal_px, (height - 1) / 2.0],
                   [0.0, 0.0, 1.0]], np.float64)
@@ -141,8 +146,10 @@ def render_stereo_views(
     tries = 0
     # 目标落点按 3x3 分格轮流取（体检 tools.check_calib 要求 8/9 格都有），
     # 这样合成数据也能过一遍体检流程，而不是只在画面中央打转。
-    # want_u/want_v 是「两眼的中点」落在哪：左眼 +b/2*f/z、右眼 -b/2*f/z，
-    # 两只都得看全整块板，所以本钱得靠拉远（dist_range 上界 1.3 m）换。
+    # 但落点只取画面中间 50% 的带状区域：板本身已占 40%~52% 画宽，
+    # 中心再往边上挪板就出框了；覆盖靠「板角伸到边格」而不是中心落在边格
+    # （与 check_calib 的角点覆盖判据一致）。
+    # want_u/want_v 是「两眼的中点」落在哪：左眼 +b/2*f/z、右眼 -b/2*f/z。
     cells = [(c, r) for r in range(3) for c in range(3)]
     rng.shuffle(cells)  # type: ignore[arg-type]
     board_c = pts.mean(axis=0)
@@ -150,11 +157,11 @@ def render_stereo_views(
         tries += 1
         z = rng.uniform(*dist_range)
         col, row = cells[len(left) % len(cells)]
-        want_u = (col + 0.5) / 3.0 * (width - 1)
-        want_v = (row + 0.5) / 3.0 * (height - 1)
-        rvec = np.array([math.radians(rng.uniform(-28, 28)),
-                         math.radians(rng.uniform(-32, 32)),
-                         math.radians(rng.uniform(-18, 18))], np.float64)
+        want_u = (0.30 + 0.4 * (col + 0.5) / 3.0) * (width - 1)
+        want_v = (0.30 + 0.4 * (row + 0.5) / 3.0) * (height - 1)
+        rvec = np.array([math.radians(rng.uniform(-24, 24)),
+                         math.radians(rng.uniform(-24, 24)),
+                         math.radians(rng.uniform(-15, 15))], np.float64)
         R = cv2.Rodrigues(rvec)[0]
         # 让「板中心」投影到 (want_u, want_v) 的两眼中点
         tvec = np.array([(want_u - (width - 1) / 2.0) * z / focal_px,

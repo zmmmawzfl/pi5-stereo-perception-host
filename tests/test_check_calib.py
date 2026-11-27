@@ -14,11 +14,12 @@ from tools.check_calib import (
 )
 
 
-def _verdict(i, cx=150.0, cy=120.0, size=600.0, sharp=1000.0, touch=False, mismatch=0.0):
+def _verdict(i, cx=150.0, cy=120.0, size=600.0, sharp=1000.0, touch=False, mismatch=0.0,
+             fill=0.5):
     return {
         "index": i, "ok": True, "found_left": True, "found_right": True,
         "n_left": 54, "n_right": 54, "expected": 54,
-        "size_px": size, "center": [cx, cy],
+        "size_px": size, "center": [cx, cy], "fill_frac": fill,
         "touch_edge": touch, "size_mismatch_pct": mismatch,
         "sharp_left": sharp, "sharp_right": sharp,
     }
@@ -72,6 +73,23 @@ class TestCoverage(unittest.TestCase):
         bad = _verdict(9, 150, 120)
         bad["ok"] = False
         self.assertEqual(coverage([bad], 300, 240)["n_cells"], 0)
+
+    def test_corner_can_reach_corner_cell(self):
+        # 板中心还在中间格，但一个角伸到了右下角：按角点算要覆盖到角格
+        v = _verdict(0, 150, 120)
+        v["corners_left"] = [[150, 120], [299, 239]]
+        g = coverage([v], 300, 240)
+        self.assertEqual(g["n_cells"], 2)
+        self.assertEqual(g["grid"][2][2], 1)
+
+    def test_corner_points_beat_centre(self):
+        # 同一个"板中心在正中"的姿态：中心法只算 1 格，角点法能算到四角和本身
+        v = _verdict(0, 150, 120)
+        v["corners_left"] = [[20, 20], [280, 20], [280, 220], [20, 220], [150, 120]]
+        g = coverage([v], 300, 240)
+        self.assertEqual(g["n_cells"], 5)
+        for col, row in ((0, 0), (2, 0), (2, 2), (0, 2), (1, 1)):
+            self.assertEqual(g["grid"][row][col], 1)
 
 
 class TestDuplicates(unittest.TestCase):
@@ -141,6 +159,25 @@ class TestDecide(unittest.TestCase):
         vs = _spread(5, ratio=3.0)
         span = size_span(vs)
         self.assertAlmostEqual(span["ratio"], 3.0, places=3)
+
+    def test_board_too_small_fails(self):
+        vs = _spread(15)
+        for v in vs:
+            v["fill_frac"] = 0.20
+        grid = coverage(vs, 300, 240)
+        d = decide(vs, grid, [], min_views=15)
+        self.assertFalse(d["passed"])
+        self.assertTrue(any("板太小" in r for r in d["reasons"]))
+        self.assertAlmostEqual(d["max_fill"], 0.20, places=3)
+
+    def test_small_fill_only_warns(self):
+        vs = _spread(15)
+        for v in vs:
+            v["fill_frac"] = 0.40
+        grid = coverage(vs, 300, 240)
+        d = decide(vs, grid, [], min_views=15)
+        self.assertTrue(d["passed"], d["reasons"])
+        self.assertTrue(any("还能再近一点" in w for w in d["warnings"]))
 
 
 class TestEndToEnd(unittest.TestCase):

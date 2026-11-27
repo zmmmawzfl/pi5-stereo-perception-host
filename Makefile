@@ -47,7 +47,7 @@ synth-calib:
 	$(PY) -m tools.synth_calib_views --out runs/synth_calib/views --views 20
 	$(PY) -m pc.calib.cli calibrate --left runs/synth_calib/views/left \
 	  --right runs/synth_calib/views/right --pattern 9x6 --square-mm 30 \
-	  --min-views 12 --out runs/synth_calib/calib.npz
+	  --min-views 15 --out runs/synth_calib/calib.npz
 
 budget:
 	$(PY) -m tools.transport_budget --width 640 --height 640 --fps 30

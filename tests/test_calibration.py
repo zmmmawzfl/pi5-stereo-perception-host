@@ -5,7 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from pc.calib.calibrate import CalibrationResult, calibrate_stereo
+from pc.calib.calibrate import CalibrationResult, _drop_outliers, calibrate_stereo
 from shared.synthetic import generate_calibration_views
 
 
@@ -48,6 +48,28 @@ class TestStereoCalibration(unittest.TestCase):
 
         with self.assertRaises(CalibrationError):
             calibrate_stereo(self.views["left"][:3], self.views["right"][:3], min_views=8)
+
+
+class TestOutlierRejection(unittest.TestCase):
+    """个别视图极线残差异常（比如某次右镜抖动）应被剔除，而不是拖累整组参数。"""
+
+    def test_drops_gross_outlier(self):
+        keep, dropped = _drop_outliers([0.1, 0.1, 0.2, 8.0, 0.1, 0.2, 0.1])
+        self.assertEqual(dropped, [3])
+        self.assertNotIn(3, keep)
+        self.assertEqual(len(keep), 6)
+
+    def test_keeps_everything_when_problem_is_systematic(self):
+        # 六成视图残差都很大：说明是标定口径/镜头的问题，剔除只会自欺欺人
+        resid = [0.1, 5.0, 6.0, 7.0, 8.0, 0.2]
+        keep, dropped = _drop_outliers(resid)
+        self.assertEqual(dropped, [])
+        self.assertEqual(keep, list(range(len(resid))))
+
+    def test_small_residuals_never_dropped(self):
+        keep, dropped = _drop_outliers([0.2, 0.3, 0.25, 0.4])
+        self.assertEqual(dropped, [])
+        self.assertEqual(keep, [0, 1, 2, 3])
 
 
 if __name__ == "__main__":

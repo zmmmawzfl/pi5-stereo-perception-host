@@ -188,6 +188,8 @@ def check(paths, verbose):
         roots = candidate_roots(doc)
         rel_doc = os.path.relpath(doc, WORKSPACE)
         for lineno, line in enumerate(open(doc, encoding="utf-8").read().splitlines(), 1):
+            if "lint:ignore" in line:      # 要写反例/占位命令时用这个标记
+                continue
             for mod in MODULE_CMD.findall(line):
                 if mod in STDLIB or mod.split(".")[0] in STDLIB:
                     continue

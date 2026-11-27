@@ -108,19 +108,27 @@ def _pose_ok(K: np.ndarray, rvec: np.ndarray, tvec: np.ndarray, pts: np.ndarray,
 
 
 def render_stereo_views(
-    n_views: int = 18,
+    n_views: int = 20,
     image_size: Tuple[int, int] = (1640, 1232),
     focal_px: float = DEFAULT_FOCAL_PX,
     baseline_m: float = 0.080,
     square_m: float = 0.030,
     pattern: Tuple[int, int] = (9, 6),
     seed: int = 11,
-    dist_range: Tuple[float, float] = (0.40, 0.85),
-    min_span_frac: float = 0.45,
+    dist_range: Optional[Tuple[float, float]] = None,
+    min_span_frac: float = 0.26,
 ) -> Dict[str, object]:
-    """生成 n_views 对左右图（BGR ndarray）+ 真值。位姿随机但保证整块板都在画面里。"""
+    """生成 n_views 对左右图（BGR ndarray）+ 真值。位姿随机但保证整块板都在画面里。
+
+    dist_range=None 时按分辨率/焦距自己算：让板在最近处约 0.55×短边、最远处约 0.29×，
+    这样 800x600 与 1640x1232 都能用同一套默认值。
+    """
     cols, rows = pattern
     width, height = image_size
+    if dist_range is None:
+        board_w = (cols + 1) * square_m
+        z_center = board_w * focal_px / (0.55 * min(width, height))
+        dist_range = (0.80 * z_center, 1.90 * z_center)
     K = np.array([[focal_px, 0.0, (width - 1) / 2.0],
                   [0.0, focal_px, (height - 1) / 2.0],
                   [0.0, 0.0, 1.0]], np.float64)
@@ -131,14 +139,27 @@ def render_stereo_views(
     right: List[np.ndarray] = []
     poses: List[Dict[str, List[float]]] = []
     tries = 0
-    while len(left) < n_views and tries < 4000:
+    # 目标落点按 3x3 分格轮流取（体检 tools.check_calib 要求 8/9 格都有），
+    # 这样合成数据也能过一遍体检流程，而不是只在画面中央打转。
+    # want_u/want_v 是「两眼的中点」落在哪：左眼 +b/2*f/z、右眼 -b/2*f/z，
+    # 两只都得看全整块板，所以本钱得靠拉远（dist_range 上界 1.3 m）换。
+    cells = [(c, r) for r in range(3) for c in range(3)]
+    rng.shuffle(cells)  # type: ignore[arg-type]
+    board_c = pts.mean(axis=0)
+    while len(left) < n_views and tries < 8000:
         tries += 1
         z = rng.uniform(*dist_range)
-        rvec = np.array([math.radians(rng.uniform(-30, 30)),
-                         math.radians(rng.uniform(-35, 35)),
-                         math.radians(rng.uniform(-20, 20))], np.float64)
-        tvec = np.array([rng.uniform(-0.10, 0.10) - baseline_m / 2.0,
-                         rng.uniform(-0.08, 0.08), z], np.float64)
+        col, row = cells[len(left) % len(cells)]
+        want_u = (col + 0.5) / 3.0 * (width - 1)
+        want_v = (row + 0.5) / 3.0 * (height - 1)
+        rvec = np.array([math.radians(rng.uniform(-28, 28)),
+                         math.radians(rng.uniform(-32, 32)),
+                         math.radians(rng.uniform(-18, 18))], np.float64)
+        R = cv2.Rodrigues(rvec)[0]
+        # 让「板中心」投影到 (want_u, want_v) 的两眼中点
+        tvec = np.array([(want_u - (width - 1) / 2.0) * z / focal_px,
+                         (want_v - (height - 1) / 2.0) * z / focal_px, z], np.float64) \
+            - R @ board_c
         if not _pose_ok(K, rvec, tvec, pts, baseline_m, min_span_frac, margin=8):
             continue
         left.append(render_view(K, rvec, tvec, texture, square_m, cols, rows))
@@ -175,7 +196,8 @@ def save_views(out_dir: str, views: Dict[str, object]) -> str:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="生成 9x6 合成标定板左右图（带真值）")
     ap.add_argument("--out", required=True, help="输出目录（会建 left/ right/ 与 truth.json）")
-    ap.add_argument("--views", type=int, default=18, help="位姿数，默认 18（标定要 >= 12）")
+    ap.add_argument("--views", type=int, default=20,
+                    help="位姿数，默认 20（标定要 >= 12；体检 check_calib 建议 >= 20）")
     ap.add_argument("--width", type=int, default=1640)
     ap.add_argument("--height", type=int, default=1232)
     ap.add_argument("--focal-px", type=float, default=DEFAULT_FOCAL_PX,

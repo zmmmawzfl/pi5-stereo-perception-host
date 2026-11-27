@@ -178,27 +178,32 @@ baseline=80.03 mm  f=1400.9 px  stereo RMS=0.31 px
 ## 5.1 硬件无关自检：合成板图 → 标定 → 对真值
 
 在花时间举着板子拍 20 张之前，先确认「读图 → 检测角点 → 标定 → 存 npz」这条路是通的。
-`tools/synth_calib_views.py` 按你的分辨率渲染 18 对棋盘（焦距按分辨率给，真值写进
+`tools/synth_calib_views.py` 按你的分辨率渲染 20 对棋盘（焦距按分辨率给，真值写进
 `truth.json`），再用同一条标定命令标回去：
 
 ```bash
-python3 -m tools.synth_calib_views --out runs/synth_calib/views --views 18
+python3 -m tools.synth_calib_views --out runs/synth_calib/views --views 20
 python3 -m pc.calib.cli calibrate --left runs/synth_calib/views/left \
     --right runs/synth_calib/views/right --pattern 9x6 --square-mm 30 \
     --min-views 12 --out runs/synth_calib/calib.npz
 # 或者：make synth-calib
 ```
 
-2026-11-28 在 Mac（cv2 5.1）上实测 1640×1232 / f=1400 px / 基线 80 mm：
+2026-11-28 在 Mac（cv2 5.1）上实测 1640×1232 / f=1400 px / 基线 80 mm / 20 个位姿：
 
 | 量 | 真值 | 标定回来 | 偏差 |
 | --- | --- | --- | --- |
-| f | 1400.0 px | 1400.9 px | +0.07% |
-| baseline | 80.0 mm | 80.0 mm | 0.00% |
-| stereo RMS | — | 0.0535 px | — |
+| f | 1400.0 px | 1400.711 px | +0.05% |
+| baseline | 80.0 mm | 80.007 mm | +0.01% |
+| stereo RMS | — | 0.0625 px | — |
 
 偏差在这个量级就说明链路本身没问题：真机标定如果差 5% 以上，问题在**图、板、装法**，
 不在代码。
+
+生成器会把 20 个位姿的**棋盘中心轮流铺到 3×3 分格里**（所以合成数据也能过 §4 的
+「覆盖 8/9 格」体检：本机实测 `tools.check_calib` 给 9/9、19–20 张可用）。为了两只眼都看全
+整块板，落点在角格时得把板拉远，距离范围是按分辨率/焦距自动算的（最短 ≈ 板宽的
+3.4×焦距/短边，最长 ≈ 1.9 倍），不用手调 `--dist`。
 
 两点注意：
 

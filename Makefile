@@ -44,7 +44,7 @@ check-calib:
 	  --out runs/calib_check.json --montage runs/calib_coverage.png
 
 synth-calib:
-	$(PY) -m tools.synth_calib_views --out runs/synth_calib/views --views 18
+	$(PY) -m tools.synth_calib_views --out runs/synth_calib/views --views 20
 	$(PY) -m pc.calib.cli calibrate --left runs/synth_calib/views/left \
 	  --right runs/synth_calib/views/right --pattern 9x6 --square-mm 30 \
 	  --min-views 12 --out runs/synth_calib/calib.npz

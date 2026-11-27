@@ -29,7 +29,7 @@ class SynthCalibViewsTest(unittest.TestCase):
         views = render_stereo_views(
             n_views=10, image_size=(800, 600), focal_px=FOCAL, baseline_m=BASELINE,
             square_m=SQUARE, pattern=PATTERN, seed=5,
-            dist_range=(0.35, 0.60), min_span_frac=0.50,
+            # dist_range 不传：让它按分辨率/焦距自己算，顺便覆盖「3x3 落点」那条路径
         )
         self.assertEqual(len(views["left"]), 10)
         self.assertEqual(views["left"][0].shape, (600, 800, 3))
@@ -48,7 +48,6 @@ class SynthCalibViewsTest(unittest.TestCase):
         views = render_stereo_views(
             n_views=3, image_size=(640, 480), focal_px=540.0, baseline_m=BASELINE,
             square_m=SQUARE, pattern=PATTERN, seed=7,
-            dist_range=(0.35, 0.55), min_span_frac=0.50,
         )
         with tempfile.TemporaryDirectory() as tmp:
             path = save_views(tmp, views)

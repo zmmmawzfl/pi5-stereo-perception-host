@@ -4,14 +4,15 @@ CALIB_ROOT ?= data/recordings/calib_board
 BASE_IMAGE ?= python:3.12-slim
 PIP_INDEX_URL ?=
 
-.PHONY: help test deps demo calib check-calib budget checker clean docker-cpu docker-ros2
+.PHONY: help test deps demo calib check-calib check-docs budget checker clean docker-cpu docker-ros2
 
 help:
 	@echo "make deps   按平台选 requirements 并安装（Linux CPU / NVIDIA / macOS）"
-	@echo "make test   运行全部 PC 测试（当前 101 个）"
+	@echo "make test   运行全部 PC 测试（当前 111 个）"
 	@echo "make demo   合成场景端到端 demo + 压缩量化"
 	@echo "make calib  生成合成标定文件"
 	@echo "make check-calib 体检标定采集（CALIB_ROOT=... 指目录）"
+	@echo "make check-docs 体检文档：md 里引用的文件/python -m 模块/make 目标是否存在"
 	@echo "make budget 640x640@30fps 链路预算"
 	@echo "make checker 生成 A3 棋盘格 PDF 到 artifacts/calibration"
 	@echo "make docker-cpu  构建纯 CPU 容器（任意 Docker 主机，跨架构一次构建）"
@@ -43,6 +44,9 @@ check-calib:
 
 budget:
 	$(PY) -m tools.transport_budget --width 640 --height 640 --fps 30
+
+check-docs:
+	$(PY) -m tools.check_docs
 
 checker:
 	$(PY) -m tools.make_checkerboard --pattern 9x6 --square-mm 30 --page a3 --out ../artifacts/calibration/board_9x6_30mm_a3

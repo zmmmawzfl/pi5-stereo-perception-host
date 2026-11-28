@@ -120,3 +120,30 @@ ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765
 - ⚠️ `rviz2` 不可用（macOS 无构建），要看 3D 用 Foxglove
 - ⚠️ `ros2` CLI 要带 `--no-daemon`
 - ⚠️ DDS 用默认的 CycloneDDS，别切 fastrtps（大图像会丢）
+
+## 8. 要不要换 ARM Linux（2026-11-28 结论：暂不换）
+
+用户问过「ARM Linux 会不会比 Mac 更好，打算装 Asahi Linux」，最后决定**继续 macOS**。结论和依据留在这里，免得下次重新论证。
+
+### 8.1 一句话
+同一颗 M2、瓶颈是 **CPU 上的 SGBM**（640 档 41–57 ms/对），换系统**不会更快**；好处只在工具链：
+原生 ROS 2、rviz2、apt OpenCV、原生 Docker、以及少掉下面 §6 那串 conda/macOS 特有的坑。
+
+### 8.2 对照
+| 现在（macOS + robostack） | Ubuntu Asahi |
+|---|---|
+| `ros2 topic list/echo` 必须加 `--no-daemon`（daemon 起不来） | 原生 ROS 2，daemon 正常 |
+| robostack env 900 MB、Python 3.14，和 3.11 venv 的 numpy 冲突 | `apt install python3-opencv python3-zmq`，系统 Python 一套 |
+| 没有 rviz2，3D 用 Foxglove 浏览器 | rviz2 直接可用 |
+| `ros2 topic hz` 不支持 `--no-daemon` | 原生命令全能 |
+| DDS 切 `rmw_fastrtps_cpp` 会丢大 Image（20 条到 0–2 条） | Linux 上两种 RMW 都正常 |
+
+### 8.3 为什么暂不换
+- **性能不变**：GPU 不参与（SGBM 走 CPU）；Asahi 也**没有 NPU 开源驱动**，将来上学习型匹配，macOS 还能走 CoreML。
+- **风险**：这是唯一的 PC；Asahi 仍标 experimental，M1/M2 图形驱动的核心开发者在 2025 年陆续离开项目，长期维护有不确定性。
+- **标定不用重做**：npz 是纯 numpy，换系统照用。
+
+### 8.4 将来真要换的正确路线
+1. **发行版必须选 Ubuntu Asahi**，不要 Fedora Asahi Remix —— Fedora 没有 ROS 2 官方 deb，换了还是得 robostack，等于只换了皮肤。
+2. 先在 UTM/lima 里起 Ubuntu 24.04 arm64 验证（装 apt ROS 2 + 跑仓库 152 项测试 + pointcloud_node），零风险。
+3. 再双系统（安装器缩 APFS 分区，保留 macOS），跑一个月再考虑抹盘。

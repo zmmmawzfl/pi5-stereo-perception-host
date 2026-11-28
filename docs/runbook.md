@@ -130,6 +130,41 @@ python -m pc.receive.live --endpoint tcp://<PI_IP>:5555 \
 先看 overlay 里的框和深度是否合理，再看 `objects.jsonl` 的数字。
 **第一次联调不要求精度**，先要求"稳定出物体、不漏帧、深度不跳飞"。
 
+
+### 3.1 完整链路实测（2026-11-28，v4 支架 + `--rotate 90`）
+
+Pi 推流 → Mac 校正 / SGBM / 深度 / 点云 / 物体，全程真实相机，跑通。
+两台机器的配置文件要点：`camera` 必须写 1640×1232 / 15 fps（`pi.service` 的 CLI 不暴露这几项）；
+Mac 没有 ultralytics 时用 `detect.backend: color`；`max_skew_ms: 1000` 只是不让 1640×1232 下的
+同步环抖动直接中止采集（这个分辨率下 P 环不收敛，标定/静态场景不需要帧同步）。
+
+```bash
+# Pi
+python -m pi.service --config /tmp/pi_e2e.yaml --backend picamera2 \
+    --frames 600 --encoding jpeg --out /tmp/pi_e2e_stats.json
+# Mac
+python -m pc.receive.live --endpoint tcp://10.42.0.1:5555 \
+    --calib /tmp/stereo_calib.npz --config /tmp/pc_e2e.yaml \
+    --out runs/e2e_live --max-pairs 6 --save-every 1 --save-cloud-every 1
+```
+
+| 指标 | 默认 `texture_threshold=6` | 调到 `2` + `num_disparities=128` |
+|---|---|---|
+| Pi 采集 | 600 对 / 40 s（15.0 fps）/ dropped 0 | 同左 |
+| Pi 推流 | 1200 帧 0 丢、213 MB、173.8 KB/帧、`throttled=0x0` | 同左 |
+| Mac 端到端 | 2.32 fps，每对 median 318 ms（SGBM 142–163 ms） | 2.19 fps，median 344 ms |
+| 视差有效覆盖 | 3.3% | **12.8%** |
+| 点云点数（voxel 0.03） | ≈2000 | **≈4700** |
+| 输出物体 | 0 | **2**（`objects.jsonl` 有 `center_3d`） |
+
+- 点云实测（`cloud_00001.ply`，binary little endian，x/y/z + rgb）：z 的 p1/p50/p99 = **0.78 / 1.90 / 2.50 m**，
+  x ±0.95 m、y ±1.24 m，与室内场景量级一致。
+- `texture_threshold` 是 SGBM 覆盖的真正瓶颈：同一对帧上 SGBM 原始有效 57.6%，融合后只剩 3.4%；
+  单独把阈值降到 4 → 5.3%、降到 2 → 12.1%，而 `lr_max_diff` 1→4 几乎无变化（3.41%→3.49%）。
+  默认值 6 是「只信强纹理」的保守选择；暗光/白墙场景要更密的深度，显式在 config 里降到 2–3。
+- 链路里还没有 ROS 2：Mac 是 arm64、没装 ROS 2，x86 主机 10.42.0.110 当前离线，
+  所以 `pointcloud_node` 这一跳仍未验证（见 §7）。
+
 ## 4. 离线复算（同一份数据反复调参）
 
 ```bash

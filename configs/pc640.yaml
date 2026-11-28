@@ -1,0 +1,22 @@
+# 640×480 实时档（2026-11-28 主线）：Pi 已在推流前把 1640 缩到 640，这里按 640 配置。
+# 用法：
+#   python -m pc.receive.live --endpoint tcp://10.42.0.1:5555 \
+#     --calib data/calib/stereo_calib_640.npz --config configs/pc640.yaml --out runs/live
+camera:
+  width: 640
+  height: 480
+  fps: 15
+
+calib:
+  calib_path: data/calib/stereo_calib_640.npz
+
+sgbm:
+  min_depth_m: 0.5        # f*B/Z = 482.8*0.08/0.5 ≈ 77 → 自动取 80 个视差
+  texture_threshold: 4.0
+  fuse_texture_gate: false
+
+detect:
+  backend: color          # Mac 未装 ultralytics；装了可改 auto
+
+pointcloud:
+  voxel_size_m: 0.03

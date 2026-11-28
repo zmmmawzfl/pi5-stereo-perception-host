@@ -335,6 +335,39 @@ python3 -m pc.calib.cli inspect --calib data/calib/stereo_calib.npz
 - 覆盖只有 3.3% 是白墙低纹理，不是标定问题；换有纹理的场景会高得多。
 
 **坑（2026-11-28 踩过）**：在第二台机器上跑体检 / 标定前，先确认那台机器的仓库副本是**当前代码**。那天 Mac 上是旧副本，check_calib 报 18/20、8/9 格、44%，同步仓库后同一批数据变成 20/20、9/9、59%。结论不同不是因为数据变了，而是检测器的降采样回退没在那份旧代码里。
+### 5.4 640×480 实时档：整批降采样再标（2026-11-28 实测）
+
+实时档的输入是 640×480（Pi 推流前缩放，见 [`runbook.md`](runbook.md) §3.3），所以标定必须用**同一个投影**。
+两条错误路线：
+
+- 拿 1640 标出来的 npz 直接去校 640 图 → 焦距/主点全不对，极线残差十几像素；
+- 开 IMX219 的原生 640×480 模式 → 那是 1640×1232 像素网格的**中心裁切**（1:1、不缩放，偏移 (500, 378)），
+  FOV 只剩 39%，和「把 1640 缩到 640」不是同一个相机；要配裁切版标定又得重标，且近距/广角全丢了。
+
+做法：把已经拍好的 1640 录制整体缩到 640，`capture.json` 里的棋盘四角/角点/尺寸同步缩放，然后重标。
+
+```bash
+python3 -m tools.rescale_record --root ../raspberry-pi/data/recordings/calib_board2 \
+    --out ../raspberry-pi/data/recordings/calib_board2_640 --width 640 --height 480
+python3 -m pc.calib.cli calibrate --replay-root ../raspberry-pi/data/recordings/calib_board2_640 \
+    --pattern 9x6 --square-mm 30 --min-views 15 --out data/calib/stereo_calib_640.npz
+```
+
+| 项 | 640 降采样（`stereo_calib_640.npz`） | 1640 全分辨率（`stereo_calib.npz`） |
+|---|---|---|
+| image_size | (480, 640)（rotation 90） | (1232, 1640)（rotation 90） |
+| RMS stereo | **0.241 px** | 0.634 px |
+| baseline | **80.195 mm** | 80.196 mm |
+| f（P1） | **482.78 px** | 1230.9 px |
+| 校正后极线残差 | 中位 ~0.3–1.0 px（活帧 SIFT `|dy|` 中位 **0.75 px**） | 中位 0.50 / p90 1.17 px |
+| 0.745 m 打印机（近簇中位） | 0.758–0.762 m（+1.7%） | 0.754 m（+1.2%） |
+
+- `tools.rescale_record` 与当初手工脚本等价：同一份 `calib_board2` 重跑，40 帧逐像素相同、
+  `quads`/`corners` 完全相同（`size_px` 会按比例缩到 74.8–224.4，这是正确单位；旧手工副本里还是 1640 的 191.6–575）。
+- 缩放到 640 后 RMS 反而更低（0.241 vs 0.634）是意料之中：角点定位在更平滑的图上是亚像素级，
+  但不代表精度更高；真实误差看 0.745 m 处的 +1.7%（约 13 mm）和极线残差。
+- 深度精度仍是 640 档的短板：远处 4 m 时 1 px 视差 ≈ 10 cm；需要毫米级就近距/全分辨率。
+
 ## 6. 失败对照表
 
 | 现象 | 先查什么 |

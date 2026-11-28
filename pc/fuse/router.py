@@ -40,9 +40,18 @@ class FusedDisparity:
 
 
 class FuseRouter:
-    def __init__(self, lr_max_diff: float = 1.0, texture_threshold: float = 8.0) -> None:
+    def __init__(
+        self, lr_max_diff: float = 1.0, texture_threshold: Optional[float] = None
+    ) -> None:
+        """texture_threshold=None 表示不做第二道纹理门（默认）。
+
+        SGBM 在匹配阶段已经按 sgbm.texture_threshold 过滤过，这里再按同一幅
+        灰度图卡一次只会重复扣点；需要更保守时可以显式传阈值打开。
+        """
         self.lr_max_diff = float(lr_max_diff)
-        self.texture_threshold = float(texture_threshold)
+        self.texture_threshold = (
+            None if texture_threshold is None else float(texture_threshold)
+        )
 
     # ------------------------------------------------------------------ #
     @staticmethod
@@ -94,7 +103,10 @@ class FuseRouter:
         lr_ok, lr_eval, lr_available = self.lr_consistent(
             sgbm.disp, sgbm.valid, sgbm.right_disp, sgbm.right_valid
         )
-        textured = texture >= self.texture_threshold
+        if self.texture_threshold is None:
+            textured = np.ones_like(sgbm.valid, dtype=bool)
+        else:
+            textured = texture >= self.texture_threshold
         sgbm_ok = sgbm.valid & lr_ok & textured
 
         learned_valid = learned.valid if learned is not None else np.zeros_like(sgbm.valid)
@@ -112,6 +124,7 @@ class FuseRouter:
         overlap = sgbm_ok & learned_valid
         total = float(sgbm.valid.size)
         stats: Dict[str, object] = {
+            "texture_gate": self.texture_threshold,
             "lr_available": lr_available,
             "lr_evaluated_px": int(lr_eval.sum()),
             "lr_rejected_px": int((sgbm.valid & ~lr_ok).sum()),

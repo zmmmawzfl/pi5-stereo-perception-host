@@ -71,6 +71,21 @@ class TestRouter(unittest.TestCase):
         self.assertFalse(fused.stats["lr_available"])
         self.assertTrue(fused.stats["sgbm_accepted_px"] > 0)
 
+    def test_texture_gate_can_be_disabled(self):
+        # 平灰画面：SGBM 自己都说有效，融合阶段不该再按纹理扣一遍
+        h, w = 20, 30
+        gray = np.full((h, w), 120, np.uint8)
+        disp = np.full((h, w), 20.0, np.float32)
+        valid = np.ones((h, w), bool)
+        sgbm = DisparityResult(disp, valid, "sgbm", right_disp=disp.copy(), right_valid=valid.copy())
+        off = FuseRouter(lr_max_diff=1.0, texture_threshold=None).fuse(sgbm, None, gray)
+        on = FuseRouter(lr_max_diff=1.0, texture_threshold=10.0).fuse(sgbm, None, gray)
+        # 左边 20 列因为右目越界本来就不参与 LR 一致性，所以不是 100%
+        self.assertGreater(off.coverage, 0.3)
+        self.assertAlmostEqual(on.coverage, 0.0)
+        self.assertIsNone(off.stats["texture_gate"])
+        self.assertEqual(on.stats["texture_gate"], 10.0)
+
     def test_stats_are_auditable(self):
         gray, sgbm, learned = make_inputs()
         fused = FuseRouter().fuse(sgbm, learned, gray)

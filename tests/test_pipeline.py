@@ -35,6 +35,12 @@ class TestPipeline(unittest.TestCase):
             self.assertEqual(len(obj["center_3d"]), 3)
             self.assertIn(obj["depth_source"], ("sgbm", "learned", "mixed", "unknown"))
 
+    def test_fuse_texture_gate_is_opt_in(self):
+        self.assertIsNone(self.pipeline.router.texture_threshold)
+        cfg = load_config(None, {"sgbm.fuse_texture_gate": True, "sgbm.texture_threshold": 4.0})
+        p = StereoPipeline(cfg, self.calib)
+        self.assertEqual(p.router.texture_threshold, 4.0)
+
     def test_min_depth_expands_disparity_range(self):
         # 默认 96 只够测到 ~1 m；配了 min_depth_m 就按 f*B/Z 自动放宽
         self.assertEqual(self.pipeline.sgbm.cfg.num_disparities, self.cfg.sgbm.num_disparities)

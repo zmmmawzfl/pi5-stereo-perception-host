@@ -46,6 +46,10 @@ class StreamConfig:
     # "jpeg"（默认，低带宽）| "raw_bgr8"（无损，高带宽；用于 640x640/1GbE 评估）
     encoding: str = "jpeg"
     jpeg_quality: int = 90
+    # 推流前把画面缩到这个尺寸（0 = 原样）。640×480 档用它省带宽：
+    # 1640×1232 jpeg 约 209 KB/帧，640×480 约 50 KB/帧。
+    width: int = 0
+    height: int = 0
     # 无损帧旁路（用于压缩伪影量化）
     raw_max_pairs: int = 0
     h264_bitrate_kbps: int = 2500
@@ -58,6 +62,12 @@ class StreamConfig:
             )
         if not 1 <= int(self.jpeg_quality) <= 100:
             raise ValueError("stream.jpeg_quality 必须在 1..100")
+        self.width = int(self.width)
+        self.height = int(self.height)
+        if (self.width == 0) != (self.height == 0):
+            raise ValueError("stream.width / stream.height 要么都设，要么都为 0（原样推流）")
+        if self.width < 0 or self.height < 0:
+            raise ValueError("stream.width / stream.height 不能为负")
 
 
 @dataclass
@@ -85,6 +95,10 @@ class SgbmConfig:
     mode: str = "sgbm_3way"
     lr_max_diff: float = 1.0
     texture_threshold: float = 6.0
+    # 融合阶段是否再按「局部纹理」卡一道门。SGBM 自己已经按 texture_threshold
+    # 过滤过；这里再卡一次会把通过左右一致性、只是纹理偏低的点也丢掉
+    # （640×480 实测覆盖率 32% -> 16%）。默认关。
+    fuse_texture_gate: bool = False
     min_valid_ratio: float = 0.05
     subpixel: bool = True
     # 视差后处理：median = 3x3/5x5 中值，去椒盐并补 1px 洞；
@@ -109,6 +123,7 @@ class SgbmConfig:
     learned_input_size: str = ""       # 如 "640x480"；空 = 原图尺寸
 
     def __post_init__(self) -> None:
+        self.fuse_texture_gate = bool(self.fuse_texture_gate)
         self.postprocess = str(self.postprocess).lower()
         if self.postprocess not in ("none", "median", "wls"):
             raise ValueError(f"sgbm.postprocess 需为 none/median/wls，当前 {self.postprocess!r}")

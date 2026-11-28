@@ -182,6 +182,8 @@ FusedDisparity(disp, valid, source: uint8 HxW, stats: dict)
 - `sgbm.postprocess`：`none | median | wls`，默认 none。median 用 3/5 中值去孤立尖刺并补 1 px 洞
   （`median_ksize`）；wls 是边缘感知滤波（`wls_lambda` / `wls_sigma_color`，需 opencv-contrib）。
   两者都会改变"有效像素"的定义，默认关；实测数据见 runbook §3.2。
+- `sgbm.fuse_texture_gate`：默认 `false`。融合阶段是否再按 5×5 局部纹理卡一道门；SGBM 已经按
+  `texture_threshold` 过滤过，重复卡会把通过左右一致性的点也丢掉（640×480 实测 32% → 16%）。
 - `sgbm.scale`：`(0,1]`，0.5 = 半分辨率匹配后视差上采样；要求 `min_disparity=0`。
 - `sgbm.roi_xywh`：归一化 `"x,y,w,h"`，只算关注区域；ROI 外像素一律无效。
 - `sgbm.learned_provider`：`auto | coreml | cuda | tensorrt | cpu`。macOS 原生用
@@ -190,3 +192,6 @@ FusedDisparity(disp, valid, source: uint8 HxW, stats: dict)
 - `detect.model_path`：Linux/NVIDIA 指向 `.engine`，macOS 指向 `.mlpackage`；
   `detect.device: auto` 会按平台解析（`.mlpackage` 固定为 cpu 输入侧，模型由 CoreML 执行）。
 - `pointcloud.voxel_size_m`：默认 0.03；`0` 关闭体素降采样。
+- `stream.width` / `stream.height`：推流前把画面缩到这个尺寸（0 = 原样）。Pi 端在 JPEG 编码前
+  `INTER_AREA` 缩放，带宽从 1640 的 174 KB/帧降到 640 的 49 KB/帧；PC 的 `camera.width/height`
+  必须改成同一尺寸，否则分辨率检查会拒绝或校正错位。

@@ -93,7 +93,9 @@ class StereoPipeline:
         self.sgbm = SGBMMatcher(self.sgbm_cfg, compute_right=True)
         self.router = FuseRouter(
             lr_max_diff=self.sgbm_cfg.lr_max_diff,
-            texture_threshold=self.sgbm_cfg.texture_threshold,
+            texture_threshold=(
+                self.sgbm_cfg.texture_threshold if self.sgbm_cfg.fuse_texture_gate else None
+            ),
         )
         self.learned = build_learned_matcher(cfg.sgbm)
         self.detector = build_detector(cfg.detect)

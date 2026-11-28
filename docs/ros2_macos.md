@@ -92,6 +92,9 @@ ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765
 "Open connection → Foxglove WebSocket → `ws://10.42.0.190:8765`"。
 
 - 3D 面板加 `/stereo/points`，Color mode 选 **RGBA/RGB**（点云自带颜色，point_step=16）。
+- **对着真实相机实测（2026-11-28 22:1x）**：Pi `pi.service --config /tmp/pi640s.yaml`（1640 采集、推流缩 640、49.5 KB/帧、1200 对 0 丢）→
+  Mac `pointcloud_node --endpoint tcp://10.42.0.1:5555 --publish-hz 5` → 60 对、**约 2500 点/帧、5 个物体**，
+  rclpy 订阅 8 s 计到 **点云 57 / 深度 56 / 左图 57 / 对象 56**；同时 @@foxglove_bridge@@ 8765 正常 advertising。
 - 图像面板加 `/stereo/left/image_rect` / `/stereo/depth`。
 - 只想要"看画面"、不想装 Foxglove：直接用 `pc.receive.live --preview-port 8080`（见 runbook §3.4），
   它不依赖 ROS，浏览器打开就有「校正图+框 | 深度伪彩 | 状态条」。

@@ -75,6 +75,52 @@ class TestVerticalBaselineGuard(unittest.TestCase):
                 )
 
 
+class TestRotation(unittest.TestCase):
+    """支架侧躺时（传感器相对基线转了 90°）必须先把画面转正再标定/推理。
+
+    角度写进 npz 的 meta，pipeline 按同一角度旋转输入帧 —— 两侧对不上就会整幅错位。
+    """
+
+    def test_rotate_image_matches_cv2(self):
+        from pc.calib.calibrate import rotate_image
+
+        img = np.arange(4 * 6 * 3, dtype=np.uint8).reshape(4, 6, 3)
+        self.assertIs(rotate_image(img, 0), img)
+        self.assertIs(rotate_image(img, 360), img)
+        np.testing.assert_array_equal(rotate_image(img, 90), cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE))
+        np.testing.assert_array_equal(rotate_image(img, 180), cv2.rotate(img, cv2.ROTATE_180))
+        np.testing.assert_array_equal(rotate_image(img, 270), cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE))
+        with self.assertRaises(ValueError):
+            rotate_image(img, 45)
+
+    def test_rotating_a_horizontal_pair_by_90_is_rejected(self):
+        # 合成数据的基线在水平方向；再转 90° 就变成竖直基线 —— 护栏必须拦住
+        views = generate_calibration_views(n_views=10, seed=7, baseline=0.083)
+        with self.assertRaises(CalibrationError):
+            calibrate_stereo(
+                views["left"], views["right"], pattern=(9, 6), square_m=0.03,
+                min_views=8, rotate_deg=90,
+            )
+
+    def test_records_rotation_and_swaps_image_size(self):
+        # 转角与宽高必须一起写对：运行时 remap 的尺寸就是 image_size
+        views = generate_calibration_views(n_views=10, seed=7, baseline=0.083)
+        with mock.patch(
+            "pc.calib.calibrate.epipolar_dy",
+            return_value={"median_abs_px": 0.1},
+        ):
+            calib = calibrate_stereo(
+                views["left"], views["right"], pattern=(9, 6), square_m=0.03,
+                min_views=8, rotate_deg=90,
+            )
+        h, w = views["left"][0].shape[:2]
+        self.assertEqual(calib.rotation_deg, 90)
+        self.assertEqual(tuple(calib.image_size), (h, w))
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "rot.npz"
+            calib.save(p)
+            self.assertEqual(CalibrationResult.load(p).rotation_deg, 90)
+
 class TestOutlierRejection(unittest.TestCase):
     """个别视图极线残差异常（比如某次右镜抖动）应被剔除，而不是拖累整组参数。"""
 

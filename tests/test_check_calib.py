@@ -180,6 +180,31 @@ class TestDecide(unittest.TestCase):
         self.assertTrue(any("还能再近一点" in w for w in d["warnings"]))
 
 
+class TestRotationSource(unittest.TestCase):
+    """采集时如果转过画面（capture.json 的 rotation_deg），体检要用同一个角度。"""
+
+    def test_reads_rotation_from_capture_json(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        from tools.check_calib import _resolve_rotation
+
+        class Args:
+            rotate = None
+            root = None
+
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "capture.json").write_text(json.dumps({"rotation_deg": 90}))
+            Args.root = tmp
+            self.assertEqual(_resolve_rotation(Args()), (90, "capture.json"))
+            Args.rotate = 270
+            self.assertEqual(_resolve_rotation(Args()), (270, "--rotate"))
+            Args.rotate = None
+            Args.root = None
+            self.assertEqual(_resolve_rotation(Args()), (0, "默认"))
+
+
 class TestEndToEnd(unittest.TestCase):
     def test_detects_synthetic_pair(self):
         # 同一块板给两台相机各渲染一次（右目沿 -x 平移一个基线），两只眼都该检出

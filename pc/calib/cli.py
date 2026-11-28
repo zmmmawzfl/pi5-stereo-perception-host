@@ -49,7 +49,30 @@ def _load_replay(root: str, max_frames: int | None = None):
     return left, right
 
 
+def _rotation_from_root(root: Optional[str]) -> int:
+    """录制目录里的 capture.json 记着采集时的旋转角；没有就当 0。"""
+    if not root:
+        return 0
+    import json
+    from pathlib import Path
+    p = Path(root) / "capture.json"
+    if not p.exists():
+        return 0
+    try:
+        return int(json.loads(p.read_text()).get("rotation_deg", 0) or 0) % 360
+    except (ValueError, OSError):
+        return 0
+
+
 def cmd_calibrate(args) -> int:
+    rotate = args.rotate
+    if rotate is None:
+        rotate = _rotation_from_root(args.replay_root)
+        src = "capture.json" if rotate else "默认"
+    else:
+        src = "--rotate"
+    if rotate:
+        print(f"画面先顺时针转 {rotate}° 再检测（来源：{src}）")
     if args.replay_root:
         left, right = _load_replay(args.replay_root, args.max_frames)
         print(f"从录制目录读取 {len(left)} 对帧: {args.replay_root}")
@@ -71,6 +94,7 @@ def cmd_calibrate(args) -> int:
             left, right, pattern=(cols, rows), square_m=args.square_mm / 1000.0,
             min_views=args.min_views, progress=True,
             fix_k3=not args.free_distortion, zero_tangent=not args.free_distortion,
+            rotate_deg=rotate,
         )
     except CalibrationError as exc:
         print(f"标定失败: {exc}", file=sys.stderr)
@@ -119,7 +143,8 @@ def cmd_synthetic(args) -> int:
 
 def cmd_inspect(args) -> int:
     c = CalibrationResult.load(args.calib)
-    print(f"image_size={c.image_size} pattern={c.pattern} square={c.square_m * 1000:.1f}mm")
+    print(f"image_size={c.image_size} pattern={c.pattern} square={c.square_m * 1000:.1f}mm"
+          f" rotation={c.rotation_deg}°")
     print(f"B={c.baseline_m * 1000:.4f} mm  f={c.focal_px:.4f} px  cx={c.cx:.3f} cy={c.cy:.3f}")
     print(f"RMS stereo={c.rms_stereo:.4f} mono=({c.rms_mono_left:.4f},{c.rms_mono_right:.4f})")
     print(f"D1={c.D1.ravel().round(5).tolist()}")
@@ -142,6 +167,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--min-views", type=int, default=10)
     p.add_argument("--free-distortion", action="store_true",
                    help="放开 k3/切向畸变（默认固定 k3、切向置零，更稳）")
+    p.add_argument("--rotate", type=int, choices=(0, 90, 180, 270), default=None,
+                   help="先把画面顺时针转多少度再检测（支架侧躺时装 90）。"
+                        "默认从 --replay-root 的 capture.json 自动读，读不到为 0；"
+                        "角度会写进 npz，pipeline 按同一角度旋转输入帧")
     p.add_argument("--out", required=True)
     p.set_defaults(func=cmd_calibrate)
 

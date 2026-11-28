@@ -35,6 +35,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
+from pc.calib.calibrate import rotate_image
+
 # ---- 验收线（改这里就等于改标准）----
 MIN_VIEWS = 15          # 可用帧对下限；calibrate 的 --min-views 默认 10，但 15 更稳
 WARN_VIEWS = 20         # 低于这个数只提示"建议多拍"，不算不合格
@@ -471,6 +473,20 @@ def write_montage(
 _IMG_EXT = (".png", ".jpg", ".jpeg", ".bmp")
 
 
+def _resolve_rotation(args) -> Tuple[int, str]:
+    """显式 --rotate 优先，否则读录制目录里 capture.json 记的角度。"""
+    if args.rotate is not None:
+        return int(args.rotate) % 360, "--rotate"
+    if args.root:
+        p = Path(args.root) / "capture.json"
+        if p.exists():
+            try:
+                return int(json.loads(p.read_text()).get("rotation_deg", 0) or 0) % 360, "capture.json"
+            except (ValueError, OSError):
+                pass
+    return 0, "默认"
+
+
 def load_pairs(args) -> Tuple[List[np.ndarray], List[np.ndarray], List[str]]:
     """返回 (左图列表, 右图列表, 每对的名字)。"""
     lefts: List[np.ndarray] = []
@@ -569,6 +585,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--scale", type=float, default=1.0, help="降采样比例，0.5 = 半分辨率")
     ap.add_argument("--min-views", type=int, default=MIN_VIEWS, help=f"可用帧对下限，默认 {MIN_VIEWS}")
     ap.add_argument("--max-pairs", type=int, default=0, help="只体检前 N 对")
+    ap.add_argument("--rotate", type=int, choices=(0, 90, 180, 270), default=None,
+                    help="先把画面顺时针转多少度再检测（支架侧躺时 90）。"
+                         "默认从 --root 的 capture.json 读，读不到为 0")
     ap.add_argument("--out", help="写 JSON 报告")
     ap.add_argument("--montage", help="写拼图 PNG")
     args = ap.parse_args(argv)
@@ -578,6 +597,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     lefts, rights, names = load_pairs(args)
     if not lefts:
         raise SystemExit("没读到任何帧对")
+    rot, rot_src = _resolve_rotation(args)
+    if rot:
+        lefts = [rotate_image(im, rot) for im in lefts]
+        rights = [rotate_image(im, rot) for im in rights]
+        print(f"画面先顺时针转 {rot}° 再体检（来源：{rot_src}）")
     width, height = lefts[0].shape[1], lefts[0].shape[0]
     sizes = {(im.shape[1], im.shape[0]) for im in lefts}
 

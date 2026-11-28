@@ -28,6 +28,28 @@ class CalibrationError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
+# 图像旋转：支架"侧躺"（传感器相对基线转了 90°）时把画面转正
+#   标定与运行时必须用**同一个角度**，否则校正图与 K 对不上。
+#   角度记在 capture.json 里，标定时写进 npz 的 meta，pipeline 从 meta 读。
+# --------------------------------------------------------------------------- #
+_ROTATE_CODES = {
+    90: cv2.ROTATE_90_CLOCKWISE,
+    180: cv2.ROTATE_180,
+    270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+}
+
+
+def rotate_image(img: np.ndarray, deg: int) -> np.ndarray:
+    """顺时针旋转 deg 度（只支持 0/90/180/270，0 原样返回）。"""
+    d = int(deg) % 360
+    if d == 0:
+        return img
+    if d not in _ROTATE_CODES:
+        raise ValueError(f"旋转角只能是 0/90/180/270，收到 {deg}")
+    return cv2.rotate(img, _ROTATE_CODES[d])
+
+
+# --------------------------------------------------------------------------- #
 # 角点检测
 # --------------------------------------------------------------------------- #
 def detect_corners(
@@ -113,6 +135,11 @@ class CalibrationResult:
     @property
     def baseline_m(self) -> float:
         return float(np.linalg.norm(self.T))
+
+    @property
+    def rotation_deg(self) -> int:
+        """标定时把画面转正用的角度（顺时针）；运行时必须按同一角度旋转输入帧。"""
+        return int(self.meta.get("rotation_deg", 0) or 0) % 360
 
     @property
     def focal_px(self) -> float:
@@ -329,6 +356,7 @@ def calibrate_stereo(
     progress: bool = False,
     fix_k3: bool = True,
     zero_tangent: bool = True,
+    rotate_deg: int = 0,
 ) -> CalibrationResult:
     """从左右目棋盘格图像完成单目 + 双目联合标定。
 
@@ -347,6 +375,9 @@ def calibrate_stereo(
     skipped: List[int] = []
 
     for i, (limg, rimg) in enumerate(zip(left_images, right_images)):
+        if rotate_deg:
+            limg = rotate_image(limg, rotate_deg)
+            rimg = rotate_image(rimg, rotate_deg)
         cl = detect_corners(limg, pattern)
         cr = detect_corners(rimg, pattern)
         if cl is None or cr is None:
@@ -368,7 +399,11 @@ def calibrate_stereo(
     if skipped:
         print(f"[calib] 警告：{len(skipped)} 对视图角点检测失败，已跳过 {skipped}")
 
-    image_size = (int(left_images[0].shape[1]), int(left_images[0].shape[0]))
+    # 转过画面的话，标定与运行时都在"转正后"的坐标系里：宽高要对调
+    if int(rotate_deg) % 180 == 90:
+        image_size = (int(left_images[0].shape[0]), int(left_images[0].shape[1]))
+    else:
+        image_size = (int(left_images[0].shape[1]), int(left_images[0].shape[0]))
 
     # 固定 k3、切向畸变置零：棋盘格数据对方程的约束有限，5 参数全放会
     # 在"真值无畸变"的数据上拟合出 k3~0.24 这种伪畸变，把 alpha=0 的校正
@@ -433,6 +468,7 @@ def calibrate_stereo(
         "epipolar_dy_before": epi_before,
         "distortion_model": {"fix_k3": bool(fix_k3), "zero_tangent": bool(zero_tangent)},
         "epipolar_dy": epi,
+        "rotation_deg": int(rotate_deg) % 360,
         "roi": {"left": [int(v) for v in roi1], "right": [int(v) for v in roi2]},
     }
 

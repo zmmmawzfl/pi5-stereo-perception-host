@@ -180,15 +180,23 @@ SB（`findChessboardCornersSB`，慢但更宽容）。classic 检不出而 SB �
 
 ### 4.1 竖直基线：`stereoRectify` 不认
 
-整套支架侧放（横躺）时，基线在画面里是**竖直**的。`cv2.stereoRectify` 是按水平基线设计的，
-这时它算出来的 `R1/R2` 接近单位阵、视差仍留在 y 方向 —— 标定会「成功」但校正后同名点竖直残差
-两三百像素。所以：
+v4 支架的孔位是 13.25 × 21 的对称矩形，模组装上去时**传感器相对基线转了 90°**（排线座所在的 25 mm 长边是竖着的）。
+于是：**不管整机是立着放还是侧躺，画面里的基线都是竖直的**（立着 = 滚转 90°，侧躺 = 再转 90°，合并 180°，
+两种都让基线竖着）—— 这不是摆放问题，是装法问题，**把支架立起来并不能修好**。
 
-- 标定前先跑 `python -m pi.tools.rig_check`，判成 `baseline_along_y` 就**把支架立起来**（两只镜头水平并排、画面直立）再拍。
-- `pc.calib` 现在有护栏：校正后竖直残差中位数 > `MAX_EPIPOLAR_DY_PX`（5 px）直接报错、不写 npz。
-- 实测对照（2026-11-28，同一批 20 对）：原始方向 RMS 3.00 px、残差中位 219 px；
-  把 20 对图整体转 90° 后 RMS 2.63 px、残差 0.3–3.4 px、f 1339 px、基线 82.8 mm。
-  → 几何本身没问题，是朝向问题。
+`cv2.stereoRectify` 是按水平基线设计的：基线竖直时它算出的 `R1/R2` 接近单位阵、视差仍留在 y 方向，
+标定会「成功」但校正后同名点竖直残差两三百像素（实测 219 px），npz 是废的。
+
+两条正解：
+
+1. **换 fpc_down 版支架**（`stl/camera_mount_b80_fpc_down.stl`，见 `raspberry-pi/hardware/README.md` §10）：
+   板转 90°、21 mm 孔距横放，画面里的基线就是水平的，标定/pipeline 都不用改。
+2. **保留 v4，软件里把输入帧转 90°**（已实现，见 §5.2）：标定、体检、pipeline 都认一个 `rotation_deg`，
+   从 `capture.json` 自动读。
+
+护栏：`pc.calib` 校正后竖直残差中位 > `MAX_EPIPOLAR_DY_PX`（5 px）直接报错、不写 npz，退出码 2。
+实测对照（2026-11-28，同一批 20 对）：原始方向 RMS 3.00 px、残差 219 px；同批图按 90° 标定后
+RMS 2.63 px、残差中位 2.11 px、f 1339 px、基线 82.79 mm → 几何没问题，纯粹是朝向。
 
 ## 5. 标定：必须在 x86 主机上跑
 
@@ -271,6 +279,30 @@ python3 -m pc.calib.cli calibrate --left runs/synth_calib/views/left \
   标定问题一模一样**。教训：合成器要给真值、并且自己先被验证过，才能拿来当"链路没问题"
   的证据。
 
+### 5.2 v4 侧躺/竖装：整批转 90° 再标定（2026-11-28）
+
+```bash
+# 采集就带上角度：会写进 capture.json 的 rotation_deg；落盘帧仍是原始方向
+.venv/bin/python -m pi.tools.capture_calib --out data/recordings/calib_board \
+    --target 20 --min-cells 8 --min-fill 0.35 --rotate 90
+# 体检：--rotate 不传就从 <root>/capture.json 读
+python3 -m tools.check_calib --root ../raspberry-pi/data/recordings/calib_board
+# 标定：同上自动读角度；也可以显式 --rotate 90
+python3 -m pc.calib.cli calibrate --replay-root ../raspberry-pi/data/recordings/calib_board \
+    --pattern 9x6 --square-mm 30 --min-views 15 --out data/calib/stereo_calib.npz
+```
+
+- **90 = 顺时针 90°**，与 `cv2.ROTATE_90_CLOCKWISE` 一致。**270 会把左右相机对调**（`T` 的 x 分量变号、
+  视差变负、点云跑到背面），视差符号不对先查这个。
+- 转 90° 后 `image_size` 必须**宽高互换**（1640×1232 → 1232×1640）；npz 里存 `image_size=(1232,1640)`
+  与 `rotation_deg=90`。`pc/pipeline.py` 在 `process()` 开头按这个角度转帧，构造时也按转正后的尺寸校验分辨率。
+- 实测（2026-11-28，20 对旧数据，手工给 `capture.json` 补 `"rotation_deg": 90`）：
+  20/20 角点 OK、自动剔除 2 个极线残差异常视图（原序号 [18,19]）、
+  `baseline=82.790 mm f=1339.184 px RMS=2.629 px`、校正后残差中位 2.11 px / p90 5.73 px；
+  SGBM 中位视差 **+118 px**（正号 = 左相机在左、右相机在右），对应深度 0.94 m，与板距 0.6–0.8 m 同量级。
+- 标完跑真实相机要**每帧都转**（pipeline 已自动做）。代价是慢：Pi 上 1640×1232 的 SGBM 约 **1.7 s/帧**，
+  要实时得降到 640×480 或换 x86 主机跑。
+
 ## 6. 失败对照表
 
 | 现象 | 先查什么 |
@@ -291,7 +323,8 @@ cd macos-pc && make synth-calib
 
 # Pi：只存合格帧（板要真的动起来）
 cd ~/桌面/深度/raspberry-pi
-.venv/bin/python -m pi.tools.capture_calib --out data/recordings/calib_board --target 15
+.venv/bin/python -m pi.tools.capture_calib --out data/recordings/calib_board --target 20 --min-cells 8 --min-fill 0.35 \
+    --rotate 90          # v4 支架（基线在画面里竖直）必须带；换成 fpc_down 版就不带
 
 # Pi：体检（看得懂就往下走）
 cd ~/桌面/深度/macos-pc

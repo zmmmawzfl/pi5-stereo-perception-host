@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from pc.calib.calibrate import CalibrationResult
+from pc.calib.calibrate import CalibrationResult, rotate_image
 from pc.depth.pointcloud import depth_from_fused
 from pc.detect.base import Detection
 from pc.detect.factory import build_detector
@@ -62,10 +62,14 @@ class StereoPipeline:
     def __init__(self, cfg: AppConfig, calib: CalibrationResult) -> None:
         self.cfg = cfg
         self.calib = calib
-        if tuple(calib.image_size) != (cfg.camera.width, cfg.camera.height):
+        # 转过 90°/270° 的话，标定的宽高是"转正后"的，和相机原生宽高刚好对调
+        expect = (cfg.camera.width, cfg.camera.height)
+        if calib.rotation_deg % 180 == 90:
+            expect = (expect[1], expect[0])
+        if tuple(calib.image_size) != expect:
             print(
-                f"[pipeline] 注意：标定分辨率 {calib.image_size} 与配置 "
-                f"{(cfg.camera.width, cfg.camera.height)} 不一致，将按标定尺寸做校正"
+                f"[pipeline] 注意：标定分辨率 {calib.image_size}（旋转 {calib.rotation_deg}°）与配置 "
+                f"{(cfg.camera.width, cfg.camera.height)} 转正后的 {expect} 不一致，将按标定尺寸做校正"
             )
         self.rectifier = Rectifier(calib)
         self.sgbm = SGBMMatcher(cfg.sgbm, compute_right=True)
@@ -81,6 +85,13 @@ class StereoPipeline:
     # ------------------------------------------------------------------ #
     def process(self, left_bgr: np.ndarray, right_bgr: np.ndarray) -> FrameResult:
         timings: Dict[str, float] = {}
+
+        # 标定时如果转过画面（支架侧躺 / 传感器相对基线转了 90°），运行时必须按
+        # 同一角度转，否则 remap 的 K 与输入对不上，校正会整幅错位。
+        rot = self.calib.rotation_deg
+        if rot:
+            left_bgr = rotate_image(left_bgr, rot)
+            right_bgr = rotate_image(right_bgr, rot)
 
         t = time.perf_counter()
         rect_l, rect_r = self.rectifier.rectify(left_bgr, right_bgr)

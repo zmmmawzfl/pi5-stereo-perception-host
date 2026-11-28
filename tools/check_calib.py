@@ -76,6 +76,18 @@ def detect(
         if detector == "sb":
             return None
     found, corners = cv2.findChessboardCorners(gray, pattern, flags=CLASSIC_FLAGS)
+    if not found and detector == "auto":
+        # 和 pc/calib/calibrate.py 的降采样回退保持一致：标定能吃下的帧，
+        # 体检就不能判它废。粗检在缩略图上、精化回原图。
+        for scale in (0.5, 0.35):
+            small = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+            found, corners = cv2.findChessboardCorners(small, pattern, flags=CLASSIC_FLAGS)
+            if found:
+                corners = corners.astype(np.float32) / np.float32(scale)
+                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 1e-3)
+                corners = cv2.cornerSubPix(gray, corners, (7, 7), (-1, -1), criteria)
+                return corners.astype(np.float32)
+        return None
     if not found:
         return None
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 1e-3)
@@ -552,8 +564,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--right", help="右目图目录")
     ap.add_argument("--pattern", default="9x6", help="内角点，默认 9x6")
     ap.add_argument("--square-mm", type=float, default=30.0, help="方格边长 mm（只写进报告）")
-    ap.add_argument("--detector", default="classic", choices=("classic", "sb", "auto"),
-                    help="classic 快；sb/auto 与标定口径一致但慢得多")
+    ap.add_argument("--detector", default="auto", choices=("classic", "sb", "auto"),
+                    help="auto（默认）= 与标定同口径（SB + 经典 + 降采样回退），慢；classic 快但会误判边界帧")
     ap.add_argument("--scale", type=float, default=1.0, help="降采样比例，0.5 = 半分辨率")
     ap.add_argument("--min-views", type=int, default=MIN_VIEWS, help=f"可用帧对下限，默认 {MIN_VIEWS}")
     ap.add_argument("--max-pairs", type=int, default=0, help="只体检前 N 对")

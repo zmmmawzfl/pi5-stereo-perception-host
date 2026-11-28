@@ -1,11 +1,17 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import cv2
 import numpy as np
 
-from pc.calib.calibrate import CalibrationResult, _drop_outliers, calibrate_stereo
+from pc.calib.calibrate import (
+    CalibrationError,
+    CalibrationResult,
+    _drop_outliers,
+    calibrate_stereo,
+)
 from shared.synthetic import generate_calibration_views
 
 
@@ -48,6 +54,25 @@ class TestStereoCalibration(unittest.TestCase):
 
         with self.assertRaises(CalibrationError):
             calibrate_stereo(self.views["left"][:3], self.views["right"][:3], min_views=8)
+
+
+class TestVerticalBaselineGuard(unittest.TestCase):
+    """整套支架侧放时基线在画面里是竖直的，cv2.stereoRectify 算不出有效校正。
+
+    这时必须报错、不写 npz —— 否则会悄悄产出一份"能加载但视差全在竖直方向"的标定。
+    """
+
+    def test_raises_when_rectified_residual_is_huge(self):
+        views = generate_calibration_views(n_views=10, seed=5, baseline=0.083)
+        with mock.patch(
+            "pc.calib.calibrate.epipolar_dy",
+            return_value={"median_abs_px": 219.0},
+        ):
+            with self.assertRaises(CalibrationError):
+                calibrate_stereo(
+                    views["left"], views["right"], pattern=(9, 6), square_m=0.03,
+                    min_views=8, progress=False,
+                )
 
 
 class TestOutlierRejection(unittest.TestCase):

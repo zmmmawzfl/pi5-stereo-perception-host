@@ -19,7 +19,7 @@ from typing import List, Optional
 import cv2
 import numpy as np
 
-from pc.calib.calibrate import CalibrationResult, calibrate_stereo
+from pc.calib.calibrate import CalibrationError, CalibrationResult, calibrate_stereo
 from shared.recording import PairReplay
 from shared.synthetic import generate_calibration_views
 
@@ -66,11 +66,15 @@ def cmd_calibrate(args) -> int:
         print("没有可用图像", file=sys.stderr)
         return 2
     cols, rows = (int(v) for v in args.pattern.lower().split("x"))
-    calib = calibrate_stereo(
-        left, right, pattern=(cols, rows), square_m=args.square_mm / 1000.0,
-        min_views=args.min_views, progress=True,
-        fix_k3=not args.free_distortion, zero_tangent=not args.free_distortion,
-    )
+    try:
+        calib = calibrate_stereo(
+            left, right, pattern=(cols, rows), square_m=args.square_mm / 1000.0,
+            min_views=args.min_views, progress=True,
+            fix_k3=not args.free_distortion, zero_tangent=not args.free_distortion,
+        )
+    except CalibrationError as exc:
+        print(f"标定失败: {exc}", file=sys.stderr)
+        return 2
     calib.meta["source"] = "real-images"
     calib.save(args.out)
     print(f"标定完成: {args.out}")

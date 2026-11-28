@@ -58,6 +58,17 @@ def detect_corners(
     )
     found, corners = cv2.findChessboardCorners(gray, pattern, flags=flags)
     if not found:
+        # 降采样回退：板占半幅 + 略糊时，经典检测器在原图上会挑，降到半幅反而稳。
+        # 粗检在缩略图上做，角点搬回原分辨率再做亚像素精化，精度不丢。
+        for scale in (0.5, 0.35):
+            small = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+            found, corners = cv2.findChessboardCorners(small, pattern, flags=flags)
+            if found:
+                corners = corners.astype(np.float32) / np.float32(scale)
+                if subpix:
+                    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 1e-3)
+                    corners = cv2.cornerSubPix(gray, corners, (7, 7), (-1, -1), criteria)
+                return corners.astype(np.float32)
         return None
     if subpix:
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 1e-3)
@@ -226,6 +237,9 @@ def _reprojection_rms(
 # 极线残差的外点判据：|dy| 超过 max(1.0 px, 3x 中位数) 的视图算异常
 OUTLIER_MIN_PX = 1.0
 OUTLIER_K = 3.0
+# 校正后同名点的竖直残差中位数上限。装对了、数据够好时是亚像素级；
+# 超这个值说明校正根本没生效（最常见：整套支架侧放，基线在画面里是竖直的）。
+MAX_EPIPOLAR_DY_PX = 5.0
 
 
 def _fit_stereo(
@@ -402,6 +416,14 @@ def calibrate_stereo(
 
     # 极线检查：把检测到的角点校正后比较 y
     epi = epipolar_dy(K1, D1, K2, D2, R1, R2, P1, P2, img_l, img_r)
+    med_dy = float(epi.get("median_abs_px") or 0.0)
+    if med_dy > MAX_EPIPOLAR_DY_PX:
+        raise CalibrationError(
+            f"校正后同名点竖直残差中位数 {med_dy:.1f} px（上限 {MAX_EPIPOLAR_DY_PX:.0f} px）——"
+            "极线校正没有生效。最常见的原因是基线在画面里是竖直的（整套支架侧放/躺倒）："
+            "cv2.stereoRectify 按水平基线设计，竖直基线时它算出来的旋转接近单位阵、视差仍留在竖直方向。"
+            "把支架立起来（两只镜头水平并排、画面直立）重拍；或把图像整体转 90° 后再标定。"
+        )
     meta = {
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "source": "real-or-synthetic",

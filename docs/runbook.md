@@ -163,8 +163,9 @@ python -m pc.receive.live --endpoint tcp://10.42.0.1:5555 \
   单独把阈值降到 4 → 5.3%、降到 2 → 12.1%，而 `lr_max_diff` 1→4 几乎无变化（3.41%→3.49%）。
   （这张表是 1640 时代、且融合阶段还有第二道纹理门时测的；2026-11-28 起第二道门默认关掉，见 §3.3。）
   默认值 6 是「只信强纹理」的保守选择；暗光/白墙场景要更密的深度，显式在 config 里降到 2–3。
-- 链路里还没有 ROS 2：Mac 是 arm64、没装 ROS 2，x86 主机 10.42.0.110 当前离线，
-  所以 `pointcloud_node` 这一跳仍未验证（见 §7）。
+- ROS 2 这一跳**已在 Mac 上跑通**（2026-11-28，robostack humble）：`pointcloud_node` 实时约 **2500 点/帧、5 Hz**，
+  `/stereo/points`、`/stereo/depth`、`/stereo/left/image_rect`、`/stereo/objects` 四个话题都在发，Foxglove bridge 8765 通。
+  注意 `ros2` 子命令要加 `--no-daemon`，RMW 用默认 CycloneDDS；细节见 [`ros2_macos.md`](ros2_macos.md) 与 §7。
 
 ### 3.2 调参旋钮：近距视差范围、中值、WLS（2026-11-28 实测）
 

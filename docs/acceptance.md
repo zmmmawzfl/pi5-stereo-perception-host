@@ -4,66 +4,66 @@
 
 ## 1. 交付物清单
 
-| # | 交付物 | 代码/文件 | 当前状态 |
+| # | 交付物 | 代码/文件 | 当前状态（2026-11-28） |
 |---|---|---|---|
-| 1 | Pi 5 采集 + 同步 + 推流服务 | `pi/service.py`、`pi/capture/`、`pi/sync/`、`pi/stream/` | 双 IMX219 采集/同步已实机验证；推流实机待测 |
-| 2 | 时间戳配对分布 + 压缩伪影量化报告 | `pi/tools/timestamp_baseline.py`、`tools/compression_report.py` | 时间戳已实测（52.8 ms → 0.56 ms）；压缩伪影待实机 |
-| 3 | 双目标定参数 + 校正映射 + 极线检查 | `pc/calib/`、`pc/rectify/`、`data/calib/stereo_calib.npz` | 完成（合成验证） |
-| 4 | PC 完整处理管线 | `pc/pipeline.py`、`pc/receive/live.py` | 完成 |
-| 5 | 物体级 3D JSON + 体素点云 PLY | `pc/objects/`、`pc/depth/`、`runs/demo/objects.json`、`cloud.ply` | 完成 |
-| 5b | ROS 2 点云/深度/对象发布 | `pc/ros2/pointcloud_node.py` | 代码完成；ROS 2 运行期未验证 |
-| 5c | Foxglove / RTAB-Map / Nav2 接入 | `docs/ros2_foxglove.md`、`ros2/config/` | 参数与说明完成；未在 ROS 2 环境跑过 |
-| 5d | macOS 原生 + Docker 混合形态 | `pc/runtime.py`、`configs/pc_macos.yaml`、`docker/`、`docker-compose.yml`、`docs/macos_docker.md` | macOS 原生基础链路已验证；Docker 镜像已在 x86 主机构建验证，ROS 节点未跑 |
-| 6 | 已知距离验证报告 | `tools/run_demo.py` 报告；实机用 `pc.receive.live` + 真值 | 合成完成；实机待测 |
-| 7 | 运动边界报告 | `tools/motion_jitter.py` | 工具完成；实机待测 |
-| 8 | 可选扩展：TSDF 网格 | `pc/tsdf/fuse_offline.py` | 完成（需 Open3D + 位姿；不作为主线依赖） |
+| 1 | Pi 5 采集 + 同步 + 推流服务 | `pi/service.py`、`pi/capture/`、`pi/sync/`、`pi/stream/` | ✅ 实机：1640×1232@15 采集、推流前缩 640×480（jpeg 48.7 KB/帧）；1200 对 0 丢。1640 下 P 环不收敛（skew 中位约 −25 ms） |
+| 2 | 时间戳配对分布 + 压缩伪影量化报告 | `pi/tools/timestamp_baseline.py`、`tools/compression_report.py` | 时间戳 ✅（640 档 52.8 ms → 0.56 ms；1640 档 −25 ms 不收敛）；压缩伪影合成 ✅（H.264 2.5 Mbps 0.41%），jpeg 对深度的实机量化未做 |
+| 3 | 双目标定参数 + 校正映射 + 极线检查 | `pc/calib/`、`pc/rectify/`、`data/calib/*.npz` | ✅ 真机 20 对：1640 **RMS 0.634 px / B 80.196 mm**；640 **RMS 0.241 px / 80.195 mm**；极线残差 0.50 / 0.194 px |
+| 4 | PC 完整处理管线 | `pc/pipeline.py`、`pc/receive/live.py` | ✅ 真实相机端到端（640 档 13–15 fps、单对 57 ms） |
+| 5 | 物体级 3D JSON + 体素点云 PLY | `pc/objects/`、`pc/depth/`、`runs/*/objects.jsonl`、`cloud_*.ply` | ✅ 真实相机 640 档每对约 4 个物体、≈2900 点（0.03 m 体素） |
+| 5b | ROS 2 点云/深度/对象发布 | `pc/ros2/pointcloud_node.py` | ✅ Mac 上 robostack humble 实测：约 2500 点/帧、5 物体、5 Hz |
+| 5c | Foxglove / RTAB-Map / Nav2 接入 | `docs/ros2_foxglove.md`、`ros2/config/` | Foxglove bridge 8765 已连通（子协议握手成功）；RTAB-Map / Nav2 / rviz2 未跑 |
+| 5d | macOS 原生 + Docker 混合形态 | `pc/runtime.py`、`configs/pc_macos.yaml`、`docker/`、`docs/macos_docker.md` | macOS 原生 ✅；Docker 的 amd64 镜像是历史基线、tar 已删，arm64 未重建 |
+| 6 | 已知距离验证报告 | `tools/run_demo.py` 报告；实机用 `pc.receive.live` + 真值 | ✅ 打印机正面 0.745 m → 640 档近簇中位 0.752–0.762 m（+1%） |
+| 7 | 运动边界报告 | `tools/motion_jitter.py` | 工具完成；实机未测 |
+| 8 | 可选扩展：TSDF 网格 | `pc/tsdf/fuse_offline.py` | 完成（需 Open3D + 显式 poses；不作为主线依赖） |
 
 ## 2. 验收指标与当前证据
 
-| 指标 | 目标 | 当前（合成/Pi 5） | 结论 |
+| 指标 | 目标 | 当前（2026-11-28 真实相机，除注明） | 结论 |
 |---|---|---|---|
-| 端到端帧率 | 25–30 fps（Pi 推流） | 推流链路未在实机跑；PC 处理约 266 ms/帧（3.75 fps，Pi 5 本机） | 待测 |
-| 时间戳差 | 中位数/IQR 记录在案 | 实测 52.765 ms（IQR 0.0025）→ 0.56 ms（200 帧 P 环） | 采集/P 环通过；未固定，固定后重测 |
+| 端到端帧率 | 25–30 fps（Pi 推流） | 640 档 **13–15 fps**（单对 57 ms）；1640 档 2.2 fps | 640 档可用，未到 25 |
+| 时间戳差 | 中位数/IQR 记录在案 | 640×480：52.765 ms → 0.56 ms（200 帧 P 环）；1640×1232：中位 **−25 ms**、period 恒 40000 µs（不收敛） | 640 通过；1640 静态可用、动态有时刻差 |
 | 运动纹理板深度抖动 | 记录在案 | 工具就绪 | 待测 |
-| Pi CPU | 无核心持续满载 | 采集+编码+推流未测；本机只跑了 PC 端 SGBM | 待测 |
-| 压缩伪影 | 深度偏移 < 1–2% | H.264 2.5 Mbps：0.41%；800 kbps：0.31% | 合成通过 |
-| 单目 RMS | < 0.3 px | 0.047 px | 通过（合成） |
-| 双目 RMS | < 0.5 px | 0.047 px | 通过（合成） |
-| 极线 \|dy\| | 接近 0 | 0.011 px | 通过（合成） |
-| 已知距离质心误差 | 记录中位数 | 1.2 mm / 0.10%（中位；单物体最差 6.3 mm） | 合成通过 |
-| 地面约束 | 记录前后两组 | \|ΔY\| 7.1→0.7 mm（近目标） | 合成有效 |
-| 真值几何区覆盖率 | 记录 | 65.4%（物体像素 49.0%） | 合成通过 |
-| 点云体素降采样 | 0.03 m 起 | 20,620 → 3,518 点 | 完成 |
-| 点云尺度 | Z=fB/d 正确 | 与物体 \|ΔZ\| 同源，1.2 mm 中位 | 合成通过 |
-| ROS 2 发布 | PointCloud2/深度/对象 | 节点/字段已实现 | 未运行（无 ROS 2） |
-| macOS 原生基础链路 | 测试/demo/回放可跑 | Apple M2：80 PC tests（2 skip）、demo 20.27 fps、回放 9.56 fps | 已验证（模型推理除外） |
-| macOS CoreML provider | `pc.runtime` 能选到 CoreML | `CoreMLExecutionProvider` 已可见 | provider 通过；YOLO/FFS 推理未跑 |
-| Docker ROS 2（Humble） | 话题/字段/Foxglove 可通 | `docker/Dockerfile.ros2` + compose | 镜像已构建并验证（2026-11-14，x86：189 个包，容器内纯 CPU E2E 3.66 fps）；**ROS 节点本体仍未跑**，无 GPU |
-| Foxglove 可视化 | 可看 | 字段与配置说明就绪 | 未运行 |
-| CPU/内存 | 有进程级观测 | `pc.validate.resources` + live `resources` | 工具就绪，实机待测 |
-| 学习型三项 | 有明确结论 | **未执行** | 待目标 PC |
+| Pi CPU | 无核心持续满载 | 采集 + 缩 640 + jpeg 稳定 15 fps、1200 对 0 丢；未单独做核心级采样 | 基本通过 |
+| 压缩伪影 | 深度偏移 < 1–2% | H.264 2.5 Mbps：0.41%；800 kbps：0.31%（合成）；jpeg q90 未量化 | 合成通过 |
+| 单目 RMS | < 0.3 px | 真机 1640 每视图 0.42–0.63 px（640 仅记录立体 RMS 0.241 px） | 1640 略超；640 通过 |
+| 双目 RMS | < 0.5 px | 1640 **0.634 px**；640 **0.241 px** | 640 通过；1640 略超 |
+| 极线 \|dy\| | 接近 0 | 1640 **0.50 px**；640 **0.194 px** | 通过 |
+| 已知距离质心误差 | 记录中位数 | 0.745 m 真值：全分辨率 +1.15%、640 档 +1.7% | 通过（<2%） |
+| 地面约束 | 记录前后两组 | 合成：\|ΔY\| 7.1→0.7 mm | 合成有效 |
+| 真值几何区覆盖率 | 记录 | 640 档 **32%**（≈2900 点）；1640 默认 3.3%（阈值 2 → 12.8%）；合成 65.4% | 真实场景取决于纹理 |
+| 点云体素降采样 | 0.03 m 起 | 合成 20,620 → 3,518 点；真机 640 档约 2900 点/帧 | 完成 |
+| ROS 2 发布 | PointCloud2/深度/对象 | ✅ Mac robostack：约 2500 点/帧、5 Hz、point_step 16 | 通过 |
+| macOS 原生基础链路 | 测试/demo/回放可跑 | Apple M2：**152 tests OK（2 skip）**、640 档 13–15 fps | 已验证（模型推理除外） |
+| macOS CoreML provider | `pc.runtime` 能选到 CoreML | `CoreMLExecutionProvider` 可见；YOLO/FFS 推理未跑（Mac 无 ultralytics/onnxruntime） | provider 通过，精度未验 |
+| Docker ROS 2（Humble） | 话题/字段/Foxglove 可通 | amd64 历史镜像（189 包、3.66 fps）tar 已删；arm64 未重建 | 历史，不做验收 |
+| Foxglove 可视化 | 可看 | 8765 端口握手成功；真实 3D 面板未逐项验 | 连通 |
+| 学习型三项 | 有明确结论 | 未执行 | 待目标机 |
 
 ## 3. 风险 → 代码落点
 
 | 风险 | 触发信号 | 代码里的应对 |
 |---|---|---|
-| Pi CPU 余量不足 | 编码/推流时核心满载 | `pi/service.py` 统计 fps/period；`build_publisher` 可关流；`stream.transport=none` 先测采集 |
+| Pi CPU 余量不足 | 编码/推流时核心满载 | `pi/service.py` 统计 fps/period；`build_publisher` 可关流；`stream.transport=none` 先测采集；`stream.width/height` 降推流分辨率 |
 | 时间戳差 ≠ 曝光同步 | 时间戳小但运动抖动大 | `tools/motion_jitter.py` 以深度抖动为判据 |
 | 压缩污染弱纹理 | SGBM 有效像素减少 | `pc/validate/compression.py` 量化；`stream.raw_max_pairs` 预留无损旁路 |
 | 学习型超延迟/显存 | >30 ms 或挤占检测 | `learned.py` 显式不可用；`fuse/router.py` 可一键回退纯 SGBM |
-| 标定不达标 | RMS >0.3/0.5 px、极线差大 | `calibrate.py` 抛错不落盘；`epipolar_dy` 进 meta |
+| 标定不达标 | RMS >0.3/0.5 px、极线差大 | `calibrate.py` 超 `MAX_EPIPOLAR_DY_PX=5` 直接抛错不落盘；`epipolar_dy` 进 meta |
+| 基线竖直导致校正失效 | 校正后同名点 \|dy\| 上百 px | v4 支架必须 `--rotate 90`；`stereoRectify` 只认画面水平基线 |
 | 位姿来源未定 | 进入 TSDF 才发现 | `pc/tsdf/fuse_offline.py` 强制要求显式 poses；没有位姿不融合 |
 | ROS 2 字段/坐标系不匹配 | Foxglove 点云无色/位置飘 | 节点固定 x/y/z float32 + r/g/b uint8、point_step=16、frame_id=camera_left；`docs/ros2_foxglove.md` 给静态 TF |
 | 导航吃不动稠密点云 | 代价地图 CPU 高 | 主线已体素 0.03 m；Nav2 只订阅 `/stereo/points`，不再叠高密度滤波 |
 
 ## 4. 尚未完成（必须在目标机/实机完成）
 
-1. Picamera2 双实例真机采集与同步环实测；
-2. 实际镜头的标定质量（畸变、装配刚性、温度漂移）；
-3. macOS 原生 CoreML（YOLO/FFS）与 Docker ROS 2 的实际跑通；
-4. Linux + NVIDIA 上 YOLOv8 TensorRT 的检测延迟与精度（macOS 数字不能替代）；
-5. 阶段三学习型匹配器的延迟/显存/精度三项实测；
-6. 真实运动场景的准静态速度上界；
-7. TSDF 的位姿来源确认与网格质量评估。
+1. 运动场景（纹理板）的深度抖动与准静态速度上界；
+2. 阶段三学习型匹配器三项（延迟/显存/精度）——Mac 还没有 onnxruntime，模型语义也未对齐；
+3. 真实相机 jpeg q90 对深度/覆盖的量化（目前压缩只测过合成 H.264）；
+4. 1640×1232 的帧同步（P 环不收敛，需要硬件触发或换曝光策略）；
+5. YOLO 真实检测（Mac 未装 ultralytics，当前 `detect.backend=color` 只验链路）；
+6. RTAB-Map / Nav2 / rviz2（Mac 上只有 Foxglove）；
+7. TSDF 的位姿来源确认与网格质量评估；
+8. PETG 的 `fpc_down` 新件装好后重标（不再需要 `--rotate 90`）。
 
-**没有这些数据之前，任何"已达验收"的结论都不成立。**
+**没有这些数据之前，任何“已达验收”的结论都不成立。**

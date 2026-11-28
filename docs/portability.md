@@ -11,7 +11,7 @@
 | 层 | 需要什么 | 是否需要编译/构建 | 说明 |
 |---|---|---|---|
 | 视觉链路 `pc.receive.live` / demo / 标定 | Python 3.10+、numpy、PyYAML、pyzmq、带 ximgproc 的 OpenCV | **不需要** | pip wheel 直接装；x86_64 / aarch64 / macOS 都有预编译轮子 |
-| ROS 2 节点 (`pc/ros2/`) | ROS 2 Humble/Jazzy + rclpy + foxglove_bridge | 仅在“本机没有 ROS 2”时才要装/构建 | Ubuntu 22.04/24.04 用 apt；macOS 或其它发行版用容器 |
+| ROS 2 节点 (`pc/ros2/`) | ROS 2 Humble/Jazzy + rclpy + foxglove_bridge | 仅在“本机没有 ROS 2”时才要装/构建 | Ubuntu 22.04/24.04 用 apt；**macOS 用 robostack conda**（已在 Mac 跑通，见 [`ros2_macos.md`](ros2_macos.md)）；也可以用容器 |
 | 容器镜像 `stereo-depth-ros2:humble` | 基础镜像 `ros:humble-ros-base` + 少量 apt 包 | 每架构一次 | 架构绑定，但可以导出/推送后复用，不必每次重建 |
 
 关键点：**镜像里没有项目代码**。`docker-compose.yml` 把仓库挂到容器的 `/workspace`，改代码不用重建镜像，重启容器即可。
@@ -28,7 +28,7 @@ python -m unittest discover -s tests -t .
 python -m tools.run_demo --out runs/demo --frames 8 --compression
 ```
 
-- 已实测（2026-11-14）：Ubuntu 26.04 x86_64 + apt 的 OpenCV 4.10 → **80 项测试 OK，11.1 s**（当时）；Pi 5 aarch64 同源代码同样 80 项 OK。**2026-11-27 复跑：x86 与 Pi 均为 111 项 OK**（PC 17.1 s）。
+- 已实测：Pi 5 aarch64 与 Mac（Apple M2，cv2 5.1）同一套源码都能跑全量测试。**2026-11-28 复跑：PC 152 项 OK（Mac 2 skip）、Pi 81 项 OK**。旧的 x86 主机（2026-11-14 上 80 项）已移除，见 [`pc_linux_x86_setup.md`](pc_linux_x86_setup.md) 顶部的历史说明。
 - 版本边界：只需要 OpenCV ≥ 4.8 且**带 contrib**（`cv2.ximgproc`，SGBM 右目匹配 + WLS）。检查：
   ```bash
   python -c "import cv2; print(cv2.__version__, hasattr(cv2,'ximgproc'))"
@@ -139,7 +139,7 @@ docker buildx build \
 
 ```bash
 python -c "import cv2; print(cv2.__version__, hasattr(cv2,'ximgproc'))"   # OpenCV 带 contrib
-python -m unittest discover -s tests -t .                                  # 111 项
+python -m unittest discover -s tests -t .                                  # 152 项（Mac 2 skip）
 python -m tools.run_demo --out runs/demo --frames 8 --compression           # 端到端
 docker compose run --rm --no-deps ros2 ros2 pkg list | wc -l                # 容器（可选）≈189
 ```

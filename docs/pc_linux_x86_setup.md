@@ -1,4 +1,8 @@
-# x86 Ubuntu 主机上的 PC 环境（2026-11-14 实测）
+# x86 Ubuntu 主机上的 PC 环境（2026-11-14 实测，历史）
+
+> **2026-11-28 起这份是历史记录**：那台 x86（10.42.0.110）已按用户要求移除，两个 amd64 镜像 tar 也已删除。
+> 现役唯一 PC 是 **Mac（10.42.0.190）**，环境与 ROS 2 见 [`ros2_macos.md`](ros2_macos.md) / [`runbook.md`](runbook.md)。
+> 文中「111 项测试」是 2026-11-27 当时，现在是 **152 项**。
 
 > 状态：这台 x86 主机（Ubuntu 26.04）已能跑通 PC 端全部 Python 测试、合成 demo、
 > 与 Pi 的 ZMQ 实时链路，以及 ROS 2 Humble 容器（`stereo-depth-ros2:humble`）。

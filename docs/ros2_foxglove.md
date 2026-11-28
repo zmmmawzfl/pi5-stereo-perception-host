@@ -123,11 +123,15 @@ ros2 launch rtabmap_ros rtabmap.launch.py \
 
 导航用占据栅格/OctoMap，不用 TSDF 网格；TSDF 只在离线扩展里出现。
 
-## 6. 当前状态
+## 6. 当前状态（2026-11-28）
 
-- 节点代码已写好并通过 `py_compile`/import 测试；**本机没有安装 ROS 2，未做运行期验证**。
-- macOS 的 Docker 资产（`docker/Dockerfile.ros2`、`docker-compose.yml`）已写，但本机没有
-  Docker/macOS，**同样未运行**。
+- **已在 Mac 上跑通**：macOS 没有官方 ROS 2 二进制，用 robostack conda 装 humble（189 包），
+  `pc.ros2.pointcloud_node` 对真实相机流发布约 **2500 点/帧、5 个物体、5 Hz**，`foxglove_bridge` 8765 可连（子协议
+  `foxglove.sdk.v1`）。安装步骤与坑见 [`ros2_macos.md`](ros2_macos.md)。
+- 上面 `source /opt/ros/humble/setup.bash` 是 Ubuntu 写法；Mac 上先 `micromamba activate ros`，
+  并且 `ros2` CLI 要加 `--no-daemon`（daemon 在 macOS 起不来），DDS 用默认 CycloneDDS。
+- **rviz2 没有 macOS 构建**，3D 统一用 Foxglove（浏览器）；RTAB-Map / Nav2 仍未在 Mac 上跑。
+- 旧的 amd64 Docker 镜像 tar 已删（2026-11-28，x86 机器移除），Docker 资产保留，要容器化就在 Mac 上重建 arm64。
 - 当前 Docker 节点自己跑 CPU 管线；native 结果桥尚未实现。容器内不要装 TensorRT/CUDA。
 - Foxglove 的字段布局按常见 point cloud 约定（x/y/z/r/g/b）；若你的版本按 `rgb` 打包，
   在 3D 面板里改用 RGB 字段或加一个 `rgb` 字段即可，不影响点几何。

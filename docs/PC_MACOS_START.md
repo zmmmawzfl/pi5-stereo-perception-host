@@ -6,7 +6,7 @@
 > OpenCV 5.0.0-contrib）已跑通 **80 个 PC 测试（2 skip）**、合成 demo（20.27 fps）和 3 对回放
 > （9.56 fps）。**Docker 未安装/未构建；YOLO 与 FFS 的模型推理未跑。**
 >
-> **2026-11-27 更新**：上面是当时状态。现在 **111 个 PC 测试 OK**（Mac 上仍可能 2 skip）；Docker 镜像已在 x86 主机构建并验证（`stereo-depth-ros2:humble`，容器内 189 个 ROS 包，纯 CPU E2E 3.66 fps）；YOLO/FFS 仍未在 GPU 上实测。
+> **2026-11-28 更新**：上面是当时状态。现在 **152 个 PC 测试 OK（Mac 上 2 skip）**；真机标定、640 实时档（13–15 fps）和 ROS 2（robostack humble，节点已在 Mac 跑通）都已完成。**x86 主机与它的 amd64 镜像 tar 已移除**，Docker 只在需要时于 Mac 上重建 arm64。YOLO/FFS 仍未实测（Mac 没有 ultralytics/onnxruntime）。
 > 下面每一步都给了“看到什么才算成功”，不要跳步，也不要把未跑的数字当结论。
 >
 > 相关深文档：[macOS/Docker 细节](macos_docker.md)、[项目状态](PROJECT_STATE.md)、
@@ -71,11 +71,11 @@ Pi 5 双 IMX219 ──ZMQ──► PC
 
 | 项 | 状态 |
 |---|---|
-| 合成/回放全链路（标定→SGBM→点云→物体） | ✅ Pi 与 macOS M2 均跑通；80 tests（Mac 2 skip） |
-| 真实相机、真实标定、真实同步 | ⚠️ 双 IMX219 已能采集；未固定、未标定 |
+| 合成/回放全链路（标定→SGBM→点云→物体） | ✅ Pi 与 macOS M2 均跑通；当时 80 tests（现 152，Mac 2 skip） |
+| 真实相机、真实标定、真实同步 | ✅ 双 IMX219 装 v4 支架、真机标定（1640 0.634 / 640 0.241 px）；⚠️ 运动同步未解决 |
 | macOS 原生基础链路 | ✅ Apple M2 已验证：demo 20.27 fps、3 对回放 9.56 fps |
 | macOS CoreML | ⚠️ `CoreMLExecutionProvider` 已可见；YOLO/FFS 推理未跑 |
-| Docker ROS 2 | ✅ 已在 x86 主机构建（2026-11-14，`stereo-depth-ros2:humble`，189 个包）；ROS 节点未跑 |
+| ROS 2 | ✅ Mac 上 robostack humble 跑通（约 2500 点/帧、5 Hz、Foxglove 8765）；x86 的 amd64 镜像 tar 已删 |
 | 模型权重 | ⚠️ `models/` 已预下载并校验，未接入/未实测 |
 | 目标 PC 帧率 | ❌ 没有；Pi 的 3.75 fps 不是 Mac/RTX 数字 |
 
@@ -285,7 +285,7 @@ auto selection: ['CoreMLExecutionProvider', 'CPUExecutionProvider']
 ### 3.3 跑测试和合成 demo
 
 ```bash
-# 111 个测试（2026-11-27）；macOS 上个别依赖 ffmpeg 的用例可能 skip
+# 152 个测试（2026-11-28）；macOS 上 2 项平台相关 skip
 python -m unittest discover -s tests -t .
 
 # 端到端合成 demo（不启用学习型，不依赖模型）

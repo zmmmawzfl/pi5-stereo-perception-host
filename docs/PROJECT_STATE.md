@@ -1,13 +1,16 @@
 # 项目状态交接（给下一个 AI / 工程师）
 
-> **2026-11-14 更新**：最新全量上下文见根目录 `../../docs/SESSION_CONTEXT.md`（若单独拷贝本仓库，请把该文件一并带上）。  
-> 本文件保留 2026-11-04 的详细架构/决策，但 H.264、实机电源、支架模型、raw 传输等最新状态以新文件为准。
+> **2026-11-28 现状（先看这里）**：权威交接是 [`docs/HANDOFF.md`](../../docs/HANDOFF.md)，逐次实测是
+> [`docs/SESSION_CONTEXT.md`](../../docs/SESSION_CONTEXT.md)（§0 现状、§60 最新）。本文件保留下方的架构与决策记录，
+> **凡是“当时数字”都以 HANDOFF/README 为准**。当前要点：PC **152 项测试 OK（Mac 2 skip）**、Pi **81 项**；
+> 两路 IMX219 已装 v4 支架（标称 80 mm）并完成真机标定（1640 RMS 0.634 px / 640 RMS 0.241 px，两份 npz）；
+> 640 实时档 13–15 fps、浏览器预览可用；ROS 2 已在 Mac 上用 robostack 跑通；**x86 主机与 amd64 镜像 tar 已移除**；
+> 下一步是 PETG `fpc_down` 新件装板后重标、真实检测器、运动场景。
 >
-> 历史基线：2026-11-04（双 IMX219 实机检查后；**不是当前提交**）
-> 仓库根目录（本仓库）：Linux 本地 `/home/chenai/桌面/深度/macos-pc`；Mac `~/Desktop/stereo-depth`。
-> 本仓库只含 **PC/macOS 端**；Pi 采集端是另一个独立仓库（本地 `../raspberry-pi`）。
-> 当时提交：`e35346e`；根 `.git` 后来已删除，两个子目录已各自建仓。
-> 当时工作区：macOS/Docker 后端、模型资产、相机检查与同步启动修正；**80 个 PC 测试**、**20 个 Pi 测试**通过（2026-11-0x 当时数字；现为 111 / 40，见 README）；双 IMX219 已能采集，但**未刚性固定**，计划 2026-11-05 做支架。
+> 历史基线：2026-11-04（双 IMX219 实机检查后；**不是当前提交**）。仓库根目录（本仓库）：Linux 本地
+> `/home/chenai/桌面/深度/macos-pc`；Mac `~/stereo/macos-pc`。本仓库只含 **PC/macOS 端**；Pi 采集端是独立仓库
+> （本地 `../raspberry-pi`）。当时提交 `e35346e`；根 `.git` 已删除，两个子目录各自建仓。
+> 当时工作区：**80 个 PC 测试 / 20 个 Pi 测试**（现 152 / 81）；双 IMX219 已能采集但未刚性固定。
 
 ---
 
@@ -89,25 +92,25 @@ SGBM 是**度量锚点**。学习型匹配器只是阶段三的候选补全路�
 
 ---
 
-## 2. 当前状态总表
+## 2. 状态总表（2026-11-28 更新；2.1 是当时快照）
 
 | 层 | 状态 | 证据 / 说明 |
 |---|---|---|
-| PC 核心管线（校正→SGBM→融合→物体→点云） | ✅ 合成验证通过 | 80 测试；`runs/demo/report.md` |
-| Pi 采集/同步/推流代码 | ✅ 双 IMX219 枚举/单帧/双实例采集已验证；❌ 刚性固定/标定未做 | 2026-11-04 实测，见 Pi 仓库 `docs/camera_check.md` |
-| Pi↔PC ZMQ 链路 | ✅ 本机回环通过 | 6 对帧 `emitted=6, orphans=0`；`runs/live_link` |
-| 双目标定 | ✅ 合成 + 录制目录验证 | 15 视图 RMS 0.047 px；录制 14 对视图中位 |
+| PC 核心管线（校正→SGBM→融合→物体→点云） | ✅ 合成 + 真机端到端 | 152 测试；真实相机 640 档 13–15 fps、单对 57 ms |
+| Pi 采集/同步/推流代码 | ✅ 双 IMX219 已装 v4 支架、完成真机标定 | 1640 RMS 0.634 px / 640 0.241 px；见 `docs/calibration_capture.md` |
+| Pi↔PC ZMQ 链路 | ✅ 千兆实测 | 943 Mbps；640 推流 48.7 KB/帧；1200 对 0 丢 |
+| 双目标定 | ✅ 真机 20 对 + 合成回归 | 1640 0.634 px / 640 0.241 px；合成 0.047 px 仅作回归 |
 | 物体级 3D + 地面约束 | ✅ 合成验证 | `\|ΔZ\|` 中位 1.2 mm；`\|ΔY\|` 近目标 7.1→0.7 mm |
 | 点云 + 体素降采样 | ✅ 合成/回放验证 | 20,620 → 3,518 点（0.03 m） |
-| ROS 2 发布节点 | ✅ 代码完成；❌ 运行期未验证 | 本机没有 ROS 2 |
-| Foxglove / RTAB-Map / Nav2 配置 | ✅ 文档/参数完成；❌ 未跑 | `docs/ros2_foxglove.md`、`ros2/config/` |
-| YOLO 检测 | ⚠️ 权重已预下载；❌ 精度未验证 | `models/yolov8n.pt`；本机无 ultralytics/引擎；默认仍退彩色连通域 |
+| ROS 2 发布节点 | ✅ Mac 实测 | robostack humble；约 2500 点/帧、5 Hz；见 `docs/ros2_macos.md` |
+| Foxglove / RTAB-Map / Nav2 配置 | Foxglove ✅ 连通；RTAB/Nav2 ❌ 未跑 | bridge 8765 握手成功；`docs/ros2_foxglove.md` |
+| YOLO 检测 | ⚠️ 权重已预下载；❌ 未跑 | `models/yolov8n.pt`；Mac 无 ultralytics，仍退彩色连通域 |
 | 学习型匹配器（阶段三） | ⚠️ ONNX 已预下载；❌ 未实测 | `models/c_fast_foundationstereo_bp2_dynbatch_dynhw.onnx`；无 GPU/onnxruntime、无数字 |
 | TSDF（阶段四） | ⚠️ 代码完成；❌ 未跑 | 缺 Open3D、缺位姿；不作为主线 |
-| 实机真实精度/同步/CPU/延迟 | ❌ 精度/尺度/运动同步待测 | 相机已连接但未固定；目标 PC 未测试；采集与 P 环已实测 |
+| 实机真实精度/同步/CPU/延迟 | ✅ 静态精度已验证；运动/温度漂移未测 | 0.745 m +1%；640 档 13–15 fps；1640 P 环不收敛 |
 | 运动边界 / 准静态速度上界 | ⚠️ 工具就绪；❌ 未测 | `tools/motion_jitter.py` |
 
-### 2.1 2026-11-04 双 IMX219 实机检查（新增）
+### 2.1 2026-11-04 双 IMX219 实机检查（当时快照）
 
 | 项 | 结果 |
 |---|---|
@@ -118,7 +121,7 @@ SGBM 是**度量锚点**。学习型匹配器只是阶段三的候选补全路�
 | P 环 200 帧 | 最后 10 帧 `1.07 → 0.56 ms`；最后 50 帧 `median 3.622`，`min 0.558`，`max 10.793` |
 | 启动收敛 | 约 150–200 帧（5–7 s @30fps）；服务前 ~131 对被判坏对丢弃，之后稳定 |
 | 旋转 | 两个相机都报 `Rotation=180`；如画面方向不合适，采集/校正前统一转 180° |
-| 测试 | Pi 仓库 20 tests OK；PC 仓库 80 tests OK |
+| 测试 | Pi 仓库 **81** tests OK；PC 仓库 **152** tests OK（2026-11-28；当时是 20/80） |
 
 **边界：** 当前只能证明“相机与 CSI 链路正常、能出图、能配对”；不能证明基线长度、镜头畸变、曝光同步或运动场景精度。详见 Pi 仓库 `docs/camera_check.md`。
 
@@ -150,7 +153,7 @@ SGBM 是**度量锚点**。学习型匹配器只是阶段三的候选补全路�
 Pi 5 端：
 
 - Pi 5 8GB 优先；官方 27W USB-C PD；
-- 双 IMX219，刚性固定基线（常见 83 mm，以标定 `T` 模长为准）；
+- 双 IMX219，刚性固定基线 **80 mm**（v4 支架实测标定 `T` 模长 80.196 mm，以标定为终值）；
 - 2 根 CSI 排线，注意 cam0/cam1 方向；
 - 主动散热；≥32GB microSD 或 NVMe；
 - 千兆网线直连 PC 或交换机，避免 WiFi。
@@ -324,7 +327,7 @@ macos-pc/
 ├── docker/                     # ROS 2 Humble CPU 容器
 ├── docker-compose.yml          # macOS Docker Desktop 服务定义
 ├── requirements-macos.txt      # macOS 原生依赖（CoreML EP）
-├── tests/                      # 111 个 PC unittest
+├── tests/                      # 152 个 PC unittest（2026-11-28）
 ├── docs/                       # 接口、第一天、阶段三、验收、runbook、macOS/Docker、本文件
 ├── data/recordings/            # 测试录制（gitignore）
 └── runs/                       # 报告与产物（gitignore）
@@ -564,8 +567,11 @@ learned 只填 (~sgbm_ok) & learned.valid
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -t .
-# Ran 80 tests ... OK
+# Ran 152 tests ... OK (skipped=2)   # 2026-11-28 在 Mac 上实测约 10.5 s
 ```
+
+- macOS 上跳过的 2 项是平台相关断言；Pi 仓库另有 **81 项**。全套数字以根 `docs/HANDOFF.md` 为准。
+- 首次在新机器上跑之前先做一次 `python -m tools.run_demo --out runs/demo --frames 8 --compression`，否则部分测试找不到 `runs/demo/calib/stereo_calib.npz`。
 
 ### 8.2 无相机端到端 demo
 
@@ -590,11 +596,18 @@ learned 只填 (~sgbm_ok) & learned.valid
     --left data/calib/left --right data/calib/right \
     --pattern 9x6 --square-mm 30 --out data/calib/stereo_calib.npz
 
-# 录制目录模式（自动跳过没有棋盘的帧）
+# 录制目录模式（自动跳过没有棋盘的帧；--rotate 从 capture.json 自动读）
 .venv/bin/python -m pc.calib.cli calibrate \
-    --replay-root data/recordings/calib_board \
+    --replay-root ../raspberry-pi/data/recordings/calib_board2 \
     --pattern 9x6 --square-mm 30 --out data/calib/stereo_calib.npz
 ```
+
+> **2026-11-28 现状**：真实数据在 Pi 的 `data/recordings/calib_board2`（20 对、1640×1232、`rotation_deg=90`），
+> 640 档用 `python -m tools.rescale_record --root ... --out ..._640 --width 640 --height 480` 生成 `calib_board2_640`。
+> v4 支架的传感器相对基线滚转 90°，**标定与流水线都要先把画面转 90°**（`--rotate 90`，或让 `capture.json` 的
+> `rotation_deg` 自动生效）；换成 `fpc_down` 新件后不要再带 `--rotate`。两份产物：
+> `data/calib/stereo_calib.npz`（1640，RMS 0.634 px / 基线 80.196 mm）与 `data/calib/stereo_calib_640.npz`
+> （640，RMS 0.241 px）。标定器自带护栏：校正后极线残差中位 > 5 px 直接报错、不写 npz。
 
 ### 8.5 回放 / 在线处理
 
@@ -637,20 +650,24 @@ python -m pc.receive.record_pairs \
 ### 8.7 ROS 2
 
 ```bash
-source /opt/ros/humble/setup.bash
+# macOS：ROS 2 走 robostack（没有官方二进制），见 docs/ros2_macos.md
+micromamba activate ros          # 本机 ~/stereo/bin/bin/micromamba，MAMBA_ROOT_PREFIX=~/stereo/mamba
 python -m pc.ros2.pointcloud_node \
-    --calib data/calib/stereo_calib.npz \
+    --calib data/calib/stereo_calib_640.npz \
     --endpoint tcp://<PI_IP>:5555 \
-    --publish-hz 10
+    --publish-hz 5
 
 # 无相机回放
 python -m pc.ros2.pointcloud_node \
-    --calib data/calib/stereo_calib.npz \
-    --replay-root data/recordings/day1 --max-pairs 300
+    --calib data/calib/stereo_calib_640.npz \
+    --replay-root ../raspberry-pi/data/recordings/calib_board2_640 --max-pairs 300
 
-# Foxglove
+# Foxglove（浏览器 http://<MAC_IP>:8765）
 ros2 run foxglove_bridge foxglove_bridge
 ```
+
+- macOS 上 `ros2` 子命令要加 `--no-daemon`（daemon 在 macOS 起不来）；RMW 用默认 **CycloneDDS**，别切 `rmw_fastrtps_cpp`（Image 消息几乎全丢）。
+- **不要**在 `micromamba activate ros` 的 shell 里跑仓库 venv 的 python（会撞 conda 的 numpy，报 `No module named 'numpy._core._multiarray_umath'`）。
 
 RTAB-Map：
 
@@ -704,55 +721,49 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 
 ---
 
-## 10. 未验证 / 已知风险
+## 10. 未验证 / 已知风险（2026-11-28 更新）
 
 | 风险/缺口 | 现状 | 影响 | 下一步 |
 |---|---|---|---|
-| 相机未固定 | 轻微碰触即改变基线/视角 | 标定与尺度结果不可复现 | 先做刚性支架，再采标定板；当前只验证“能采集” |
-| Picamera2 双实例 | 代码完成，未跑 | 可能遇到 CSI 排线/相机枚举/`SensorTimestamp` 问题 | `rpicam-hello --list-cameras`，再跑 `timestamp_baseline` |
-| 时间戳差 ≠ 曝光同步 | 只有仿真 | 时间戳好看但运动抖动大 | 用运动纹理板的 SGBM 质心抖动判定 |
-| 真实标定质量 | 只有合成/录制 | 畸变、装配刚性、温度漂移未知 | 15–25 对视图，查 RMS/极线 |
-| Pi CPU/散热 | 未测 | 编码+推流可能满载/降频 | 全开时看 `vcgencmd`/`top`，锁定 governor |
-| 目标 PC 帧率 | 未测 | 3.75 fps 是 Pi 数字；macOS CoreML 也不等于 RTX | RTX 3060 上跑同一 demo；Mac 数字单独标注 |
-| macOS CoreML 运行期 | provider 已可见；模型推理未跑 | CoreML EP 可能不支持动态 shape | 先 `python -m pc.runtime`，FFS 先 cpu 后 coreml |
-| Docker ROS 2 运行期 | 镜像已构建（x86，2026-11-14）；ROS 节点未跑 | 话题/TF/QoS/端口可能有坑 | Docker Humble 跑 node + Foxglove:8765；容器无 GPU |
-| YOLO 精度 | 权重已下载，本机无 ultralytics/引擎 | 物体框与类别仍不可用 | 在目标 PC 用真实数据评估；不要把 `.pt` 当 TensorRT 延迟 |
-| 学习型匹配器 | ONNX 已下载，未实测 | 无法判断是否值得保留 | 先核对输入/归一化/输出，再按 `docs/stage3.md` 三项验收 |
-| TSDF | 缺 Open3D/位姿 | 不能作为主线 | 先确定转台/机械臂位姿来源，再离线试 |
-| 相机移动/卷帘 | 未测 | 运动时深度抖动/几何畸变 | `tools/motion_jitter.py` 量化速度边界 |
+| v4 传感器滚转 90° | 标定与流水线靠 `--rotate 90`（`capture.json` 自动带） | 忘转 → 基线在画面里竖直、`stereoRectify` 等于没做；护栏会在残差 > 5 px 时报错 | 换 PETG `fpc_down` 新件后去掉 `--rotate` 重标 |
+| 新件未实装 | `fpc_down` 只做过 STL 几何核验（射线法 21 点、0 非流形边） | 首件可能有 FDM 收缩/孔位偏差 | 打完先用 2.5 mm 钻头通 8 个 Ø2.4 孔、逐个试塞 M2 螺母，再装板量光心距 |
+| 运动场景 / 帧同步 | 1640×1232 下 P 环不收敛（skew 中位约 −25 ms）；640 档静态可用 | 动态物体左右不同时刻 → 深度错 | 用运动纹理板跑 `tools/motion_jitter.py` 量化速度边界；必要时降低曝光时间或改用硬件触发 |
+| 640 档远处精度 | 640 焦距约 483 px，1 px 视差 ≈ 10 cm | 2 m 外深度粒度粗 | 精细测量切回 1640 档（`stereo_calib.npz`） |
+| 检测器 | `detect.backend: color` 占位；Mac 没装 ultralytics | 框/类别不可信 | 装 ultralytics 用真实数据评估；同时看 YOLO 对物体 3D 的影响 |
+| RTAB-Map / Nav2 | 未跑（Foxglove 已通） | 建图/导航链路未验证 | robostack 里补 `rtabmap_ros`、Nav2，用 `ros2/config/` 的参数 |
+| 学习型匹配器 | ONNX 已下载，适配未对齐、Mac 无 onnxruntime | 无法判断是否值得保留 | 先核对输入/归一化/输出，再按 `docs/stage3.md` 三项验收 |
+| TSDF | 缺位姿来源 | 不能作为主线 | 先确定转台/机械臂位姿，再离线试 |
+| Pi CPU/散热 | 640 档 13–15 fps 时正常（`throttled 0x0`）；1640 SGBM 约 1.7 s/帧 | 全分辨率不能实时 | 实时主线用 640；1640 只做精细测量 |
+| 标定只覆盖静态 | 20 对、RMS 0.634/0.241 px；温度漂移未测 | 长时间运行可能漂 | 隔一段时间复跑 `rig_check`（反推基线）做漂移监控 |
 
 ---
 
-## 11. 下一步优先级（给下一个会话）
+## 11. 下一步优先级（2026-11-28 重排）
 
-### P0：2026-11-05 刚性固定 + 第一天基线
+### P0：换 PETG 新件 + 真实检测
 
-1. **先做刚性支架**：两个模组锁死、`cam1` 调焦；用卷尺记录近似基线，但最终仍以标定 `T` 模长为准；
-2. `rpicam-hello --list-cameras` 再确认两个 IMX219；
-3. 跑 `pi.tools.timestamp_baseline --frames 100`（不推流、不加控制），记录中位数/IQR；当前未固定读数约 `52.8 ms`，固定后应重测；
-4. 再跑 `--with-control --frames 200`，比较 P 环前后；当前可压到约 `0.56 ms`，固定后重测；
-5. 用慢速运动纹理板记录 SGBM 质心深度抖动（时间戳差好看不代表曝光同步）；
-6. 拍 15–25 对棋盘格，跑真实标定，检查 RMS/极线；
-7. 0.3/0.8/1.5 m 已知距离目标，输出无/有地面约束误差表；
-8. 记录 Pi 全开 CPU/温度/是否降频；记录端到端延迟。
+1. **PETG `fpc_down` 件到货** → 装两路模组（排线座朝同侧、朝下）→ 量光心距（应 80 mm）→
+   `python -m pi.tools.rig_check --out runs/rig_check` 要判 `baseline_along_x`；
+2. 用**不带 `--rotate`** 的方式重采 20 对棋盘（`--min-cells 8 --min-fill 0.35`）→ `check_calib` → 重标，
+   丢掉现在依赖 `--rotate 90` 的隐含状态；
+3. 装 `ultralytics`（Mac 上 `~/stereo/.venv/bin/pip install ultralytics`）把 `detect.backend` 从 `color` 换成 `yolo`，
+   用真实场景看框和物体 3D；
+4. 运动边界：慢速移动纹理板，量化 640 档能容忍的速度（`tools/motion_jitter.py`）。
 
 ### P1：机器人接入
 
-1. 在 macOS Docker（Humble）或 Ubuntu 22.04 安装 `foxglove_bridge`、`rtabmap_ros`、Nav2；
-   本仓库的 `docker-compose.yml` 已装 Foxglove bridge，RTAB-Map/Nav2 按需追加；
-2. 跑 `pc.ros2.pointcloud_node`，确认 `/stereo/points`、`/stereo/depth`、`camera_info`、`/stereo/objects`；
-3. Foxglove：RGB 上色、关 normals、图像 5–10 Hz、点云 decay 0；
-4. RTAB-Map：`MemoryThr=300`、`DetectionRate=1.0`，确认图像/深度/camera_info 同步；
-5. Nav2：ObstacleLayer 订阅 `/stereo/points`，确认代价地图可跑；
-6. 目标 PC 上测真实帧率/CPU/内存，决定 `scale`/ROI/96 视差档位。
+1. robostack 里补 `ros-humble-rtabmap-ros`、Nav2（`micromamba install -n ros -c robostack-humble ...`）；
+2. `pc.ros2.pointcloud_node` 已实测（约 2500 点/帧、5 Hz）→ 接 RTAB-Map：`MemoryThr=300`、`DetectionRate=1.0`，
+   确认图像/深度/camera_info 同步；
+3. Nav2：ObstacleLayer 订阅 `/stereo/points`，确认代价地图可跑；
+4. Foxglove：RGB 上色、关 normals、图像 5–10 Hz、点云 decay 0（bridge 已在 8765 验证）。
 
 ### P2：精度与扩展
 
-1. 真实数据上重跑压缩量化，确认 H.264 码率；
-2. YOLO 权重已就位，在目标 PC 上评估检测对物体 3D 的影响（本机不能跑 ultralytics）；
-3. 阶段三学习型 A/B（先核对 FFS ONNX 的输入/输出，再严格三项验收，不达标就回退）；
-4. 运动边界测试（速度上界）；
-5. TSDF 仅在位姿来源确定后做离线扩展。
+1. 需要毫米级时切 1640 档（`stereo_calib.npz`，SGBM 约 1.7 s/帧），或只对 ROI 跑全分辨率；
+2. 阶段三学习型 A/B（先核对 FFS ONNX 的输入/输出，再严格三项验收，不达标就回退）；
+3. TSDF 仅在位姿来源确定后做离线扩展；
+4. 温度/长时间漂移监控：定期跑 `rig_check` 反推基线，偏离 80 mm 超过 1.5% 就重标。
 
 ---
 
@@ -778,7 +789,7 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 | 验收/风险 | `docs/acceptance.md` |
 | 接口契约 | `docs/interfaces.md` |
 | 联调排障 | `docs/runbook.md` |
-| 640×640 链路预算 | `docs/transport.md`、`tools/transport_budget.py` |
+| 传输链路预算 | `docs/transport.md`（640×640 是历史假设）、`tools/transport_budget.py` |
 | ROS/Foxglove | `docs/ros2_foxglove.md` |
 | 阶段三 | `docs/stage3.md` |
 | macOS/Docker | `docs/macos_docker.md`、`docker-compose.yml`、`docker/Dockerfile.ros2` |
@@ -807,9 +818,9 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 ## 14. 给下一个会话的建议开场
 
 > 先读 `docs/PROJECT_STATE.md`（本文件）和 `README.md`。
-> 当前主线是机器人双目感知，不是 3D 建模；默认纯 SGBM，96 视差，0.03 m 体素，ROS 2 发布代码已写但本机没装 ROS 2。
-> 相机已连接且采集已验证，但**未固定**；**2026-11-05 先做刚性支架并给 cam1 调焦**，固定前不要标定。
-> 先在 Pi 仓库看 `docs/camera_check.md`，再跑 111 个 PC 测试和 `tools.run_demo`，
+> 当前主线是机器人双目感知，不是 3D 建模；默认纯 SGBM（近距自动视差），0.03 m 体素；ROS 2 已在 Mac 上跑通（robostack）。
+> 相机已装 v4 支架并完成真机标定（1640 0.634 px / 640 0.241 px，两份 npz）；下一步是 PETG `fpc_down` 新件装板后重标。
+> 先在 Pi 仓库看 `docs/camera_check.md`，再跑 152 个 PC 测试和 `tools.run_demo`，
 > 最后按 `docs/acceptance.md` 的“尚未完成”清单继续。
 > 改代码前先看 `docs/interfaces.md` 的数据契约；改融合规则前先看 `docs/stage3.md` 的“SGBM 优先、不平均”。
 
@@ -817,4 +828,4 @@ Nav2 obstacle layer 见 `ros2/config/nav2_obstacle.yaml`；完整说明见 `docs
 
 ## 15. 一句话交接
 
-**这是一个能跑、能测、能出报告的实时双目感知基线：合成/回放链路完整，机器人 ROS 2 接入代码就绪；双 IMX219 实机采集已验证，但尚未刚性固定；真实标定/尺度/运动同步、目标 PC 帧率、ROS 2 运行期和学习型匹配器仍未验收。**
+**这是一个能跑、能测、能出报告的实时双目感知基线：合成/回放链路完整，真实相机端到端在 Mac 上 13–15 fps（640 档），真机标定与 ROS 2/Foxglove 均已跑通；尚未验收的是运动/温度漂移、真实检测器、RTAB-Map/Nav2 与学习型匹配器。**

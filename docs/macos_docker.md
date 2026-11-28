@@ -1,8 +1,9 @@
 # macOS 原生 + Docker 混合运行（PC 端）
 
-> 状态：macOS 原生基础链路已在 Apple M2（8 GB、macOS 27.2、Python 3.14.6、OpenCV 5.0.0-contrib）
-> 验证：80 tests（2 skip）、demo 20.27 fps、3 对回放 9.56 fps；`CoreMLExecutionProvider` 可见。
-> **Docker 尚未安装/构建；YOLO、FFS 模型推理未跑。** 下面的 Docker 命令仍是待执行清单。
+> 状态（2026-11-28）：macOS 原生基础链路已在 Apple M2 上验证，现为 **152 tests（2 skip）**、640 实时档 13–15 fps；
+> `CoreMLExecutionProvider` 可见。**旧的 amd64 镜像 tar 已删除**（x86 机器移除），Docker 只在需要时于 Mac 上重建 arm64；
+> ROS 2 现在走 robostack conda（见 [`ros2_macos.md`](ros2_macos.md)），不再依赖 Docker。YOLO、FFS 模型推理未跑。
+> 下面的 Docker 命令保留为可选方案（重建 arm64 镜像时用）。
 
 ## 0. 一句话
 

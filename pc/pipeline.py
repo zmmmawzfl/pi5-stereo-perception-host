@@ -75,14 +75,20 @@ class StereoPipeline:
         # 近距盲区：默认 96 只够测到 ~1 m；配了 min_depth_m 就按 f*B/Z 自动放宽
         self.sgbm_cfg = cfg.sgbm
         if float(cfg.sgbm.min_depth_m) > 0.0:
+            scale = float(cfg.sgbm.scale)
             n = auto_num_disparities(
-                cfg.sgbm.min_depth_m, calib.focal_px, calib.baseline_m, cfg.sgbm.max_disparities
+                cfg.sgbm.min_depth_m,
+                calib.focal_px,
+                calib.baseline_m,
+                cfg.sgbm.max_disparities,
+                scale=scale,
             )
             self.sgbm_cfg = replace(cfg.sgbm, num_disparities=n)
             if n != int(cfg.sgbm.num_disparities):
+                where = f"（scale {scale:g} 下的工作分辨率）" if scale < 1.0 else ""
                 print(
-                    f"[pipeline] sgbm.num_disparities 按最近 {cfg.sgbm.min_depth_m:g} m 自动设为 {n}"
-                    f"（配置里的 {cfg.sgbm.num_disparities} 被覆盖）"
+                    f"[pipeline] sgbm.num_disparities 按最近 {cfg.sgbm.min_depth_m:g} m "
+                    f"自动设为 {n}{where}（配置里的 {cfg.sgbm.num_disparities} 被覆盖）"
                 )
         self.sgbm = SGBMMatcher(self.sgbm_cfg, compute_right=True)
         self.router = FuseRouter(

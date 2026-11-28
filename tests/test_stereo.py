@@ -112,6 +112,16 @@ class TestAutoDisparity(unittest.TestCase):
     def test_clamped_by_max(self):
         self.assertEqual(auto_num_disparities(0.05, 1231.0, 0.08, 256), 256)
 
+    def test_half_scale_uses_working_resolution(self):
+        # 全分辨率 208；0.5 倍图只需 104，向上取 16 的倍数 = 112
+        self.assertEqual(auto_num_disparities(0.5, 1231.0, 0.08, scale=0.5), 112)
+        # 0.35 倍：208*0.35 = 72.8 -> 80
+        self.assertEqual(auto_num_disparities(0.5, 1231.0, 0.08, scale=0.35), 80)
+
+    def test_scale_must_be_positive(self):
+        with self.assertRaises(ValueError):
+            auto_num_disparities(0.5, 1231.0, 0.08, scale=0.0)
+
     def test_rejects_bad_arguments(self):
         with self.assertRaises(ValueError):
             auto_num_disparities(0.0, 1231.0, 0.08)

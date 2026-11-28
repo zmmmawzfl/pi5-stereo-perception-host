@@ -45,6 +45,16 @@ class TestPipeline(unittest.TestCase):
         self.assertGreater(expected, 96)
         self.assertEqual(p.sgbm.cfg.min_depth_m, 0.3)
 
+    def test_min_depth_and_half_scale_fit_working_range(self):
+        # 近距 + 半分辨率：范围要按工作分辨率缩，别把全分辨率的值塞进 0.5 倍图
+        cfg = load_config(None, {"sgbm.min_depth_m": 0.5, "sgbm.scale": 0.5})
+        p = StereoPipeline(cfg, self.calib)
+        expected = auto_num_disparities(
+            0.5, self.calib.focal_px, self.calib.baseline_m, scale=0.5
+        )
+        self.assertEqual(p.sgbm.cfg.num_disparities, expected)
+        self.assertEqual(p.sgbm.cfg.num_disparities % 16, 0)
+
     def test_depth_accuracy(self):
         rows = object_error_rows(self.result.objects, self.render.objects)
         self.assertEqual(len(rows), 3)

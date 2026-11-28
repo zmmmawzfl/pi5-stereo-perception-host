@@ -35,20 +35,31 @@ def _to_gray(img: np.ndarray) -> np.ndarray:
 
 
 def auto_num_disparities(min_depth_m: float, focal_px: float, baseline_m: float,
-                         max_disparities: int = 256) -> int:
+                         max_disparities: int = 256, scale: float = 1.0) -> int:
     """按"最近要测多近"反推视差搜索范围（16 的倍数）。
 
     d = f*B/Z：想在 Z=min_depth_m 处还能测，视差范围至少要 f*B/Z。默认 96 只够
     到 1 m 左右（f=1231、B=0.08 时 1.03 m），桌面/机械臂近距场景会直接测不到。
     上限由 max_disparities 兜住（越大越慢，SGBM 代价与范围成正比）。
+
+    scale<1 时 SGBM 在缩放后的图上匹配，视差也要按同一比例缩：
+    0.5 倍图上 208 全分辨率像素的视差范围只需要 104（向上取 16 的倍数 → 112）。
+    返回的是**工作分辨率**下的范围，SGBMMatcher 会在还原时 /scale。
     """
     if min_depth_m <= 0:
         raise ValueError("min_depth_m 需 > 0")
     if focal_px <= 0 or baseline_m <= 0:
         raise ValueError("focal_px / baseline_m 需 > 0")
+    if not (0.0 < float(scale) <= 1.0):
+        raise ValueError("scale 需在 (0, 1]")
     need = float(focal_px) * float(baseline_m) / float(min_depth_m)
-    n = int(np.ceil(need / 16.0)) * 16
-    return int(max(64, min(int(max_disparities), n)))
+    n_full = int(np.ceil(need / 16.0)) * 16
+    n_full = int(max(64, min(int(max_disparities), n_full)))
+    if float(scale) >= 1.0:
+        return n_full
+    n_work = int(np.ceil(n_full * float(scale) / 16.0)) * 16
+    cap = max(16, int(np.ceil(int(max_disparities) * float(scale) / 16.0)) * 16)
+    return int(max(16, min(cap, n_work)))
 
 
 def median_filter_disparity(

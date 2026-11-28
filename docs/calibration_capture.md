@@ -303,6 +303,38 @@ python3 -m pc.calib.cli calibrate --replay-root ../raspberry-pi/data/recordings/
 - 标完跑真实相机要**每帧都转**（pipeline 已自动做）。代价是慢：Pi 上 1640×1232 的 SGBM 约 **1.7 s/帧**，
   要实时得降到 640×480 或换 x86 主机跑。
 
+### 5.3 验收：拿到 npz 之后怎么判断它是对的（2026-11-28 实测）
+
+标定器自己会报 RMS 和校正后极线残差，但**别只看它自报**。下面三步是本机跑通过的最小验收：
+
+```bash
+# 1) 体检（auto 检测器；会从 <root>/capture.json 读 rotation_deg）
+python3 -m tools.check_calib --root ../raspberry-pi/data/recordings/calib_board2 --out runs/calib_check2.json --montage runs/calib_coverage2.png
+# 期望：20/20 可用、9/9 格、最大占宽 >= 45%、无 warning
+
+# 2) 标定（Mac 上几秒）
+python3 -m pc.calib.cli calibrate --replay-root ../raspberry-pi/data/recordings/calib_board2 --pattern 9x6 --square-mm 30 --min-views 15 --out data/calib/stereo_calib.npz
+
+# 3) 打印 npz 摘要，核对这几个数
+python3 -m pc.calib.cli inspect --calib data/calib/stereo_calib.npz
+```
+2026-11-28 这一批（`calib_board2`，v4 + `--rotate 90`）的实测值：
+
+| 项 | 值 | 怎么判 |
+|---|---|---|
+| 体检 | 20/20 可用、9/9 格、198..574 px（2.89x）、最大占宽 59% | 全过；少于 8 格或小于 35% 占宽就别标 |
+| RMS | **0.634 px** | 小于 1 px 算好；大于 1.5 px 先查糊 / 板不平 |
+| baseline | **80.193 mm** | 与卡尺量的 80 mm 差小于 1% |
+| 焦距 P1[0,0] | **1230.9 px** | 与 K1[0,0] 差 10–20% 正常（alpha=0 裁剪），差 22% 以上要警觉 |
+| 校正后极线残差 | 中位 **0.50**、p90 **1.17 px** | 阈值 MAX_EPIPOLAR_DY_PX = 5，超了标定器直接报错不写 npz |
+
+**活帧复核**（Pi 上抓一对真实场景，用 StereoPipeline(cfg, npz) 跑一遍）：
+
+- 校正图上再算一次 SIFT 匹配的 dy：这次 174 个好匹配、**|dy| 中位 1.26 px**；
+- 用视差反推距离对一下画面：50.4 px 得 Z = f*B/d = 1.96 m，深度图中位 1.91 m、p10–p90 1.74–2.12 m，和衣柜 / 椅子距离一致；
+- 覆盖只有 3.3% 是白墙低纹理，不是标定问题；换有纹理的场景会高得多。
+
+**坑（2026-11-28 踩过）**：在第二台机器上跑体检 / 标定前，先确认那台机器的仓库副本是**当前代码**。那天 Mac 上是旧副本，check_calib 报 18/20、8/9 格、44%，同步仓库后同一批数据变成 20/20、9/9、59%。结论不同不是因为数据变了，而是检测器的降采样回退没在那份旧代码里。
 ## 6. 失败对照表
 
 | 现象 | 先查什么 |

@@ -31,6 +31,8 @@ RUNTIME_PATTERNS = (
     # artifacts/ 不属于任何 git 仓库（里面有标定板 PDF、镜像 tar 等），
     # 新机器 clone 两个仓库后必然没有；文档引用它不算错。
     r"^artifacts/",
+    # backups/ 是本机备份（Mac 环境与项目），新机器 clone 后也不会有。
+    r"^backups/",
     r"(^|/)pairs\.json$",
     r"(^|/)capture\.json$",
     r"^runs/",

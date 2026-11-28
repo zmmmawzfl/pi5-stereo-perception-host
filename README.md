@@ -83,7 +83,7 @@ flowchart LR
 | 学习型匹配器 | ⚠️ 仅适配器/ONNX 预下载 | 未在 GPU 上实测；FFS 预处理语义待对齐 |
 | ROS 2 节点 | ⚠️ 代码完成 | 本机未装 ROS 2；容器里有 Humble，但 `pointcloud_node` **还没跑过**（话题/TF/QoS 未验证） |
 | Foxglove / RTAB-Map / Nav2 | ⚠️ 参数/文档完成 | 未在 ROS 2 环境验证 |
-| Docker ROS 2 | ✅ 镜像已构建（x86 主机） | `docker/Dockerfile.ros2` 出 `stereo-depth-ros2:humble`（2.13 GB，容器内 189 个包），容器里跑通纯 CPU E2E 3.66 fps；**ROS 2 节点本体未跑**，容器无 GPU |
+| Docker ROS 2 | ⛔ 历史（x86 已移除） | 2026-11-15 在 x86 主机构建的 amd64 镜像（2.13 GB、189 包、容器内 3.66 fps）**只是历史基线**；镜像 tar 已删，Mac arm64 上要用就重新构建 arm64 版。ROS 2 现在走 robostack conda，见 `docs/ros2_macos.md` |
 
 > 111 个测试里有平台/provider、ROS 打包、SGBM ROI、点云体素等单测；**测试通过不等于实机精度通过**。
 
@@ -102,7 +102,7 @@ flowchart LR
 | H.264 2.5 Mbps 最大深度偏移 | **0.41%** | 压缩往返量化 |
 | 处理耗时（Pi 5） | SGBM **150 ms** / 总 **266 ms** / **3.75 fps** | 仅正确性参考 |
 | Mac 短序列 demo | **20.27 fps** | M2，3 帧，非目标 PC |
-| 处理耗时（x86 Pentium G4560） | SGBM **173.7 ms** / 总 **359.8 ms** / **2.78 fps** | 8 帧合成 demo，纯 CPU，无 GPU |
+| 处理耗时（x86 Pentium G4560，2026-11-15 历史） | SGBM **173.7 ms** / 总 **359.8 ms** / **2.78 fps** | 8 帧合成 demo，纯 CPU；该机器 2026-11-28 已移除，现役 Mac M2 见 runbook §3.3 |
 | 实机同步（Pi） | **52.8 ms → 0.56 ms** | 200 帧 P 环；相机未固定 |
 
 | 深度图 | 视差 / 源图 |

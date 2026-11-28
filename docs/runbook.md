@@ -235,7 +235,8 @@ median/WLS 默认关，按需开。
 
 ### 3.3 640×480 实时档（2026-11-28 实测，主线）
 
-桌面/近距场景不需要 1640×1232 的带宽和算力：Pi 仍按 1640 采集（保 FOV），**推流前缩到 640×480**，
+桌面/近距场景不需要 1640×1232 的带宽和算力：Pi 仍按 1640 采集（保 FOV），**推流前缩到 640×480**
+（`cv2.resize(INTER_AREA)`：1640/640 = 2.5625、1232/480 = 2.567，约 **6.6 个源像素面积平均成 1 个**，不是 4 个），
 PC 用「同一批 1640 标定数据缩到 640」标出来的 `stereo_calib_640.npz` 校正。
 
 ```yaml
@@ -268,6 +269,36 @@ sgbm: {min_depth_m: 0.5, texture_threshold: 4.0, fuse_texture_gate: false}
 - 精细测量/远距仍用 1640 全分辨率（`docs/calibration_capture.md` §5.3）；`sgbm.scale: 0.5` 是另一条路
   （半分辨率匹配、视差上采样），在 640 输入上已无意义。
 
+### 3.4 浏览器实时看画面（2026-11-28 新增，PC 端）
+
+运行时想看「PC 到底算出了什么」，不用装 GUI、不用 X11、也不用 rviz：
+`pc.receive.live` 起一个内置的 MJPEG 服务，任何浏览器打开就能看。
+
+```bash
+# Mac（10.42.0.190）上，边收流边开预览
+~/.venv/bin/python -m pc.receive.live \
+    --endpoint tcp://10.42.0.1:5555 \
+    --calib data/calib/stereo_calib_640.npz \
+    --config /tmp/pc640s.yaml \
+    --out runs/preview --preview-port 8080
+```
+
+然后浏览器打开 **http://10.42.0.190:8080/**（同一网段的任何机器都行，Pi 的桌面浏览器也能开）。
+
+| 画面 | 内容 |
+|---|---|
+| 左半 | 校正后的左图 + 物体框 + 「class Z=1.10m sgbm」标签 |
+| 右半 | 深度 Turbo 伪彩色（近=红/黄，远=蓝；黑=无效） |
+| 底部状态条 | pair 号、物体数、融合覆盖率、单对耗时、Z 的 2–98% 分位 |
+| 服务端每秒刷新 | 页面右上角的 fps / 覆盖率 / 耗时（读 `/stats.json`） |
+
+- 附加端点：`/snapshot.jpg`（抓单帧，方便截图/存档）、`/stats.json`（给脚本判断卡没卡）。
+- 成本：每对多一次 JPEG 编码（640 宽合成图约 3 ms、约 64 KB/帧），对 13 fps 的处理没有可测影响。
+- 默认 `--preview-scale 1.0`；远程看/带宽紧张时用 0.5。`--preview-port 0` 即关闭（默认关）。
+- 实测（2026-11-28，640 实时档）：页面显示 **14.7 fps、覆盖 35%、53 ms**，物体框与点云深度一致。
+  效果图：`artifacts/preview_2026-11-28/snapshot.jpg`。
+- 它显示的是 **PC 计算之后**的画面（校正 + 深度 + 物体），不是 Pi 的原始视频流；
+  想只看原始画面，直接在 Pi 上开 `pi.service` 时用 `--preview`（若有）或抓 `/tmp` 里的录制。
 ## 4. 离线复算（同一份数据反复调参）
 
 ```bash
@@ -304,6 +335,10 @@ python -m tools.motion_jitter --replay-root data/recordings/static \
 - [ ] 记录一段已知距离（0.5 m / 1 m）做绝对误差表。
 
 ## 7. ROS 2 / Foxglove 联调（在装了 ROS 2 的 PC 上）
+
+> **Mac 上装法见 [`ros2_macos.md`](ros2_macos.md)**（robostack conda，已装好；没有 rviz2，可视化用 Foxglove）。
+> 下面 `source /opt/ros/humble/setup.bash` 是 Ubuntu 的写法，Mac 用 `micromamba activate ros`。
+> macOS 两个坑：`ros2` CLI 加 **`--no-daemon`**；DDS 保持默认 **CycloneDDS**（切 fastrtps 后 ~1 MB 的 Image 大量丢）。
 
 先确认纯 Python 管线能出点云（不需要 ROS 2）：
 

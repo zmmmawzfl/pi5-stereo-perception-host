@@ -8,7 +8,7 @@
 
 1. **Pi 端采集**：边拍边验，只存两只眼都检出完整 9x6 棋盘的帧 → `pi.tools.capture_calib`
 2. **体检**：覆盖、尺寸跨度、重复、锐度，一次说清缺什么 → `tools.check_calib`
-3. **标定**：在 x86 主机上跑（Pi 跑不动，见 §5 的实测）
+3. **标定**：在 PC 上跑 —— 现在是 Mac 10.42.0.190（x86 主机 2026-11-28 已移除；Pi 跑不动，见 §5 的实测）
 4. **验收**：看 baseline / f / RMS 与逐视图残差
 
 ---
@@ -129,7 +129,7 @@ python3 -m tools.check_calib \
     --montage runs/calib_coverage.png
 ```
 
-（在 Pi 上用 classic 检测器跑得动：20 对、降采样一半约 1 秒。换到 x86 主机上跑同一条命令，路径换成拷贝过去的位置。）
+（在 Pi 上用 classic 检测器跑得动：20 对、降采样一半约 1 秒。换到 Mac 上跑同一条命令，路径换成拷贝过去的位置。）
 
 输出：
 
@@ -198,13 +198,13 @@ v4 支架的孔位是 13.25 × 21 的对称矩形，模组装上去时**传感�
 实测对照（2026-11-28，同一批 20 对）：原始方向 RMS 3.00 px、残差 219 px；同批图按 90° 标定后
 RMS 2.63 px、残差中位 2.11 px、f 1339 px、基线 82.79 mm → 几何没问题，纯粹是朝向。
 
-## 5. 标定：必须在 x86 主机上跑
+## 5. 标定：必须在 PC 上跑（现在是 Mac）
 
 Pi 5（aarch64）上 `findChessboardCornersSB` 的实测：820x616 的干净合成棋盘，
 **超过 2 分钟没返回**；而经典检测在同一张图上只要 10 ms。标定链路第一步就是 SB，
 所以在 Pi 上标定会卡死在第一张图，不是慢，是不可用。
 
-做法：把录制目录拷到 x86 主机（之前的 `ubuntu@10.42.0.110`），在那边跑：
+做法：把录制目录拷到 Mac（`mac@10.42.0.190`，2026-11-28 起唯一 PC；原来的 x86 `ubuntu@10.42.0.110` 已移除），在那边跑：
 
 ```bash
 scp -r data/recordings/calib_board ubuntu@10.42.0.110:/home/ubuntu/pi5-stereo-perception-host/data/recordings/
@@ -272,7 +272,7 @@ python3 -m pc.calib.cli calibrate --left runs/synth_calib/views/left \
 
 两点注意：
 
-- 这一步会跑 `findChessboardCornersSB`，**只在 x86 / Mac 上跑**（Pi 上会卡住，见 §5）；
+- 这一步会跑 `findChessboardCornersSB`，**只在 PC（Mac）上跑**（Pi 上会卡住，见 §5）；
   测试 `tests/test_synth_calib_views.py` 因此在 aarch64 上默认 skip（`RUN_CALIB_IT=1` 可强制）。
 - 2026-11-28 第一版生成器写错过两处（棋盘纹理画成 11×9 格却按 10×7 的高宽贴、右目平移
   方向取反），结果标定回来 f 偏 +5%、baseline 偏 +11%、RMS 0.87 px —— **看起来和真实的
@@ -301,7 +301,7 @@ python3 -m pc.calib.cli calibrate --replay-root ../raspberry-pi/data/recordings/
   `baseline=82.790 mm f=1339.184 px RMS=2.629 px`、校正后残差中位 2.11 px / p90 5.73 px；
   SGBM 中位视差 **+118 px**（正号 = 左相机在左、右相机在右），对应深度 0.94 m，与板距 0.6–0.8 m 同量级。
 - 标完跑真实相机要**每帧都转**（pipeline 已自动做）。代价是慢：Pi 上 1640×1232 的 SGBM 约 **1.7 s/帧**，
-  要实时得降到 640×480 或换 x86 主机跑。
+  要实时得降到 640×480（见 runbook §3.3）或换更强的 PC。
 
 ### 5.3 验收：拿到 npz 之后怎么判断它是对的（2026-11-28 实测）
 
@@ -383,7 +383,7 @@ python3 -m pc.calib.cli calibrate --replay-root ../raspberry-pi/data/recordings/
 ## 7. 最短路径
 
 ```bash
-# x86 / Mac：先自检链路（合成板图 -> 标定 -> 对真值，10 秒）
+# PC（Mac / 任意 Linux）：先自检链路（合成板图 -> 标定 -> 对真值，10 秒）
 cd macos-pc && make synth-calib
 
 # Pi：只存合格帧（板要真的动起来）
@@ -395,6 +395,6 @@ cd ~/桌面/深度/raspberry-pi
 cd ~/桌面/深度/macos-pc
 python3 -m tools.check_calib --root ../raspberry-pi/data/recordings/calib_board --montage runs/calib_coverage.png
 
-# x86：拷过去再体检一次，然后标定
+# PC：拷过去再体检一次，然后标定
 # 产物落到 data/calib/stereo_calib.npz，被 pc.receive.live / ros2 节点用 --calib 指过去
 ```

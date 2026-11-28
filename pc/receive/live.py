@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import sys
 import time
@@ -23,6 +24,7 @@ import cv2
 from pc.calib.calibrate import CalibrationResult
 from pc.depth.pointcloud import cloud_from_result, write_ply
 from pc.pipeline import build_pipeline
+from pc.receive.preview import PreviewServer, composite
 from pc.receive.sources import PairFeed
 from pc.validate.resources import ResourceMonitor
 from pc.validate.visualize import draw_objects, source_map
@@ -42,6 +44,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--save-every", type=int, default=30, help="每 N 对存一次可视化，0 关闭")
     ap.add_argument("--save-cloud-every", type=int, default=0,
                     help="每 N 对存一次体素降采样点云 PLY，0 关闭")
+    ap.add_argument("--preview-port", type=int, default=0,
+                    help="浏览器实时预览端口（0=关；例如 8080，打开 http://<本机IP>:8080/）")
+    ap.add_argument("--preview-host", default="0.0.0.0")
+    ap.add_argument("--preview-scale", type=float, default=1.0,
+                    help="预览图缩放（1.0 = 原尺寸；0.5 可省一半带宽）")
+    ap.add_argument("--preview-quality", type=int, default=80)
+    ap.add_argument("--preview-every", type=int, default=1,
+                    help="每 N 对更新一次预览")
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -57,8 +67,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         max_pairs=args.max_pairs,
         idle_timeout_s=args.idle_timeout,
     )
+    preview = None
+    if args.preview_port:
+        preview = PreviewServer(
+            host=args.preview_host, port=args.preview_port,
+            quality=args.preview_quality,
+        ).start()
+        print("[preview] 浏览器打开 {}（Ctrl-C 结束）".format(preview.url), flush=True)
+
     frames = 0
     timings = []
+    recent = collections.deque(maxlen=120)
     monitor = ResourceMonitor()
     t_start = time.time()
     try:
@@ -87,6 +106,18 @@ def main(argv: Optional[list[str]] = None) -> int:
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
             timings.append(result.timings_ms["total"])
             frames += 1
+            recent.append(time.time())
+            if preview is not None and (frames % max(args.preview_every, 1) == 0):
+                now = recent[-1]
+                span = now - recent[0] if len(recent) > 1 else 0.0
+                fps_now = (len(recent) - 1) / span if span > 1e-6 else 0.0
+                preview.update(composite(result, calib, args.preview_scale), {
+                    "pair_id": item.pair_id,
+                    "fps": fps_now,
+                    "coverage_pct": float(result.fused.coverage) * 100.0,
+                    "total_ms": float(result.timings_ms["total"]),
+                    "objects": len(result.objects),
+                })
             if args.save_every and frames % args.save_every == 0:
                 cv2.imwrite(str(out / f"overlay_{frames:05d}.png"),
                             draw_objects(result.rectified_left, result.objects, calib))
@@ -99,6 +130,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     except KeyboardInterrupt:
         print("\n[live] 中断", flush=True)
     finally:
+        if preview is not None:
+            preview.close()
         if feed.stats is not None:
             print(json.dumps({"pairing": feed.stats.as_dict()}, ensure_ascii=False))
 

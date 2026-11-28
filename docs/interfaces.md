@@ -177,6 +177,11 @@ FusedDisparity(disp, valid, source: uint8 HxW, stats: dict)
 算力相关的三项：
 
 - `sgbm.num_disparities`：默认 96（实时档位；必须是 16 的倍数）。
+- `sgbm.min_depth_m` / `sgbm.max_disparities`：>0 时按 `f*B/Z` 自动算视差范围（向上取 16 的倍数，
+  上限 max_disparities，默认 256），解决"96 只够测到 ~1 m"的近距盲区；0 = 关闭自动。
+- `sgbm.postprocess`：`none | median | wls`，默认 none。median 用 3/5 中值去孤立尖刺并补 1 px 洞
+  （`median_ksize`）；wls 是边缘感知滤波（`wls_lambda` / `wls_sigma_color`，需 opencv-contrib）。
+  两者都会改变"有效像素"的定义，默认关；实测数据见 runbook §3.2。
 - `sgbm.scale`：`(0,1]`，0.5 = 半分辨率匹配后视差上采样；要求 `min_disparity=0`。
 - `sgbm.roi_xywh`：归一化 `"x,y,w,h"`，只算关注区域；ROI 外像素一律无效。
 - `sgbm.learned_provider`：`auto | coreml | cuda | tensorrt | cpu`。macOS 原生用

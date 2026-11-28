@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -22,7 +22,7 @@ from pc.objects.aggregator import AggregateResult, ObjectAggregator
 from pc.rectify.rectifier import Rectifier, measure_epipolar_residual
 from pc.stereo.base import DisparityResult
 from pc.stereo.learned import build_learned_matcher
-from pc.stereo.sgbm import SGBMMatcher
+from pc.stereo.sgbm import SGBMMatcher, auto_num_disparities
 from pc.stereo.subpixel import refine_disparity_subpixel
 from shared.config import AppConfig
 
@@ -72,10 +72,22 @@ class StereoPipeline:
                 f"{(cfg.camera.width, cfg.camera.height)} 转正后的 {expect} 不一致，将按标定尺寸做校正"
             )
         self.rectifier = Rectifier(calib)
-        self.sgbm = SGBMMatcher(cfg.sgbm, compute_right=True)
+        # 近距盲区：默认 96 只够测到 ~1 m；配了 min_depth_m 就按 f*B/Z 自动放宽
+        self.sgbm_cfg = cfg.sgbm
+        if float(cfg.sgbm.min_depth_m) > 0.0:
+            n = auto_num_disparities(
+                cfg.sgbm.min_depth_m, calib.focal_px, calib.baseline_m, cfg.sgbm.max_disparities
+            )
+            self.sgbm_cfg = replace(cfg.sgbm, num_disparities=n)
+            if n != int(cfg.sgbm.num_disparities):
+                print(
+                    f"[pipeline] sgbm.num_disparities 按最近 {cfg.sgbm.min_depth_m:g} m 自动设为 {n}"
+                    f"（配置里的 {cfg.sgbm.num_disparities} 被覆盖）"
+                )
+        self.sgbm = SGBMMatcher(self.sgbm_cfg, compute_right=True)
         self.router = FuseRouter(
-            lr_max_diff=cfg.sgbm.lr_max_diff,
-            texture_threshold=cfg.sgbm.texture_threshold,
+            lr_max_diff=self.sgbm_cfg.lr_max_diff,
+            texture_threshold=self.sgbm_cfg.texture_threshold,
         )
         self.learned = build_learned_matcher(cfg.sgbm)
         self.detector = build_detector(cfg.detect)

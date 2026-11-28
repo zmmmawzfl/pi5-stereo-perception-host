@@ -87,6 +87,16 @@ class SgbmConfig:
     texture_threshold: float = 6.0
     min_valid_ratio: float = 0.05
     subpixel: bool = True
+    # 视差后处理：median = 3x3/5x5 中值，去椒盐并补 1px 洞；
+    # wls = 边缘感知加权最小二乘（需 opencv-contrib，慢）
+    postprocess: str = "none"  # none | median | wls
+    median_ksize: int = 3
+    wls_lambda: float = 8000.0
+    wls_sigma_color: float = 1.5
+    # 视差范围：min_depth_m > 0 时按 f*B/Z 自动算 num_disparities（16 的倍数），
+    # 解决"默认 96 只够测到 1 m"的近距盲区；0 = 用手写的 num_disparities
+    min_depth_m: float = 0.0
+    max_disparities: int = 256
     # 算力旋钮：scale<1 先降分辨率匹配，再上采样视差；roi_xywh 只算关注区域。
     # 归一化坐标 "x,y,w,h"（0~1），空串 = 全图。降分辨率时要求 min_disparity=0。
     scale: float = 1.0
@@ -99,6 +109,17 @@ class SgbmConfig:
     learned_input_size: str = ""       # 如 "640x480"；空 = 原图尺寸
 
     def __post_init__(self) -> None:
+        self.postprocess = str(self.postprocess).lower()
+        if self.postprocess not in ("none", "median", "wls"):
+            raise ValueError(f"sgbm.postprocess 需为 none/median/wls，当前 {self.postprocess!r}")
+        if int(self.median_ksize) not in (3, 5):
+            raise ValueError(f"sgbm.median_ksize 只能是 3 或 5，当前 {self.median_ksize}")
+        if float(self.wls_lambda) <= 0.0 or float(self.wls_sigma_color) <= 0.0:
+            raise ValueError("sgbm.wls_lambda / wls_sigma_color 需 > 0")
+        if float(self.min_depth_m) < 0:
+            raise ValueError("sgbm.min_depth_m 不能为负（0 = 不自动算视差范围）")
+        if int(self.max_disparities) < 64 or int(self.max_disparities) % 16 != 0:
+            raise ValueError("sgbm.max_disparities 需为 >=64 且是 16 的倍数")
         if not (0.0 < float(self.scale) <= 1.0):
             raise ValueError(f"sgbm.scale 必须在 (0,1] 内，当前 {self.scale}")
         if int(self.num_disparities) <= 0 or int(self.num_disparities) % 16 != 0:

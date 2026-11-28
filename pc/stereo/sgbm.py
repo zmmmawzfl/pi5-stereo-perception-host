@@ -34,6 +34,41 @@ def _to_gray(img: np.ndarray) -> np.ndarray:
     return img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
 
+def auto_num_disparities(min_depth_m: float, focal_px: float, baseline_m: float,
+                         max_disparities: int = 256) -> int:
+    """按"最近要测多近"反推视差搜索范围（16 的倍数）。
+
+    d = f*B/Z：想在 Z=min_depth_m 处还能测，视差范围至少要 f*B/Z。默认 96 只够
+    到 1 m 左右（f=1231、B=0.08 时 1.03 m），桌面/机械臂近距场景会直接测不到。
+    上限由 max_disparities 兜住（越大越慢，SGBM 代价与范围成正比）。
+    """
+    if min_depth_m <= 0:
+        raise ValueError("min_depth_m 需 > 0")
+    if focal_px <= 0 or baseline_m <= 0:
+        raise ValueError("focal_px / baseline_m 需 > 0")
+    need = float(focal_px) * float(baseline_m) / float(min_depth_m)
+    n = int(np.ceil(need / 16.0)) * 16
+    return int(max(64, min(int(max_disparities), n)))
+
+
+def median_filter_disparity(
+    disp: np.ndarray, valid: np.ndarray, ksize: int = 3
+) -> Tuple[np.ndarray, np.ndarray]:
+    """中值滤波视差：去孤立尖刺，顺带补 1 px 的洞。
+
+    无效像素先置 0 再滤波，滤波后 >0 才算有效——所以大片无效区不会被"填"出
+    伪深度，只有被有效邻居包围的 1 px 洞会被补上。属 opt-in 行为（默认不开）。
+    """
+    k = int(ksize)
+    if k not in (3, 5):
+        raise ValueError(f"median_ksize 只能是 3 或 5，收到 {ksize}")
+    filled = np.where(valid, disp, 0.0).astype(np.float32)
+    out = cv2.medianBlur(filled, k)
+    out_valid = out > 0.0
+    out[~out_valid] = 0.0
+    return out, out_valid
+
+
 @dataclass(frozen=True)
 class _Geometry:
     """一次 ROI/缩放计算在原图中的位置与比例。"""
@@ -53,7 +88,9 @@ class SGBMMatcher:
     def __init__(self, cfg: SgbmConfig, compute_right: bool = True, use_wls: bool = False) -> None:
         self.cfg = cfg
         self.compute_right = compute_right
-        self.use_wls = bool(use_wls and _HAS_XIMGPROC)
+        self.postprocess = str(cfg.postprocess).lower()
+        # 老参数 use_wls 仍然认；config 里 postprocess="wls" 也等价开启
+        self.use_wls = bool((use_wls or self.postprocess == "wls") and _HAS_XIMGPROC)
         self.scale = float(cfg.scale)
         self.roi = self._parse_roi(cfg.roi_xywh)
         bs = cfg.block_size
@@ -160,8 +197,8 @@ class SGBMMatcher:
         if self.use_wls and raw_r is not None:
             try:
                 wls = cv2.ximgproc.createDisparityWLSFilter(self.matcher)
-                wls.setLambda(8000)
-                wls.setSigmaColor(1.5)
+                wls.setLambda(float(self.cfg.wls_lambda))
+                wls.setSigmaColor(float(self.cfg.wls_sigma_color))
                 filtered = wls.filter(raw_l, work_l, None, raw_r)
                 if filtered is not None:
                     f = filtered.astype(np.float32)
@@ -177,6 +214,11 @@ class SGBMMatcher:
             except cv2.error as exc:  # pragma: no cover - 依赖 contrib 行为
                 meta["wls_error"] = str(exc)
 
+        if self.postprocess == "median":
+            disp_small, valid_small = median_filter_disparity(
+                disp_small, valid_small, self.cfg.median_ksize
+            )
+
         disp, valid = self._restore(disp_small, valid_small, geo)
 
         right_disp: Optional[np.ndarray] = None
@@ -189,6 +231,15 @@ class SGBMMatcher:
 
         latency = (time.perf_counter() - t0) * 1000.0
         meta["num_disparities"] = self.cfg.num_disparities
+        meta["postprocess"] = self.postprocess
+        if self.postprocess == "wls":
+            if _HAS_XIMGPROC:
+                meta["wls_params"] = {
+                    "lambda": float(self.cfg.wls_lambda),
+                    "sigma_color": float(self.cfg.wls_sigma_color),
+                }
+            else:
+                meta["wls_unavailable"] = True
         return DisparityResult(
             disp=disp,
             valid=valid,

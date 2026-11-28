@@ -7,6 +7,7 @@ import numpy as np
 
 from pc.depth.pointcloud import colored_pointcloud, write_ply
 from pc.pipeline import StereoPipeline
+from pc.stereo.sgbm import auto_num_disparities
 from pc.validate.metrics import coverage_report, object_error_rows
 from shared.config import load_config
 from tests.helpers import get_cached_calib, make_scene
@@ -33,6 +34,16 @@ class TestPipeline(unittest.TestCase):
         for obj in payload["objects"]:
             self.assertEqual(len(obj["center_3d"]), 3)
             self.assertIn(obj["depth_source"], ("sgbm", "learned", "mixed", "unknown"))
+
+    def test_min_depth_expands_disparity_range(self):
+        # 默认 96 只够测到 ~1 m；配了 min_depth_m 就按 f*B/Z 自动放宽
+        self.assertEqual(self.pipeline.sgbm.cfg.num_disparities, self.cfg.sgbm.num_disparities)
+        cfg = load_config(None, {"sgbm.min_depth_m": 0.3})
+        p = StereoPipeline(cfg, self.calib)
+        expected = auto_num_disparities(0.3, self.calib.focal_px, self.calib.baseline_m)
+        self.assertEqual(p.sgbm.cfg.num_disparities, expected)
+        self.assertGreater(expected, 96)
+        self.assertEqual(p.sgbm.cfg.min_depth_m, 0.3)
 
     def test_depth_accuracy(self):
         rows = object_error_rows(self.result.objects, self.render.objects)
